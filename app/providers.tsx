@@ -13,7 +13,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
 import { useRouter } from "next/navigation";
 import { add as diagLog } from "@/lib/diagnostics/logger";
-import { initRuntimeConfig, isDesktopMode, getClerkPublishableKey } from "@/lib/runtime/config";
+// Read env directly for flags/Clerk (no runtime config)
 import { configureSupabaseFromRuntime } from "@/lib/supabase";
 import { getPkce, clearPkce } from "@/lib/auth/pkceStore";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -22,29 +22,32 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = React.useState(false);
   const [bootError, setBootError] = React.useState<string | null>(null);
   const [webKey, setWebKey] = React.useState<string | null>(null);
-  const desktopMode = isDesktopMode();
+  // Desktop mode flag from env (NEXT_PUBLIC_DESKTOP_DISABLE_CLERK)
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   const router = useRouter();
   // Bootstrap: read config from env and initialize Supabase client (no runtime/API fetch)
   React.useEffect(() => {
     (async () => {
       try {
-        await initRuntimeConfig();
         configureSupabaseFromRuntime();
         // Derive Clerk publishable key only in web mode; show helpful error if missing
         try {
-          if (!isDesktopMode()) {
-            const k = getClerkPublishableKey();
-            setWebKey(k);
+          if (!desktopMode) {
+            const k = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY as string | undefined;
+            if (k && k.length > 0) setWebKey(k); else throw new Error("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY missing");
           }
         } catch (e: any) {
           setWebKey(null);
           setBootError("CLERK_PUBLISHABLE_KEY missing. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY in .env.local or Vercel Project Settings (Environment Variables).");
         }
         setReady(true);
-        try { diagLog("success", "[Bootstrap] Runtime config + Supabase ready"); } catch {}
+        try { diagLog("success", "[Bootstrap] Env config + Supabase ready"); } catch {}
       } catch (e: any) {
         setBootError(e?.message || String(e));
-        try { diagLog("error", "[Bootstrap] Failed to initialize runtime config", { error: String(e?.message || e) }); } catch {}
+        try { diagLog("error", "[Bootstrap] Failed to initialize env config", { error: String(e?.message || e) }); } catch {}
       }
     })();
   }, []);

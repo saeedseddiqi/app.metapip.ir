@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { fetchRemoteEnvs, initRuntimeConfig, getClerkBaseUrl, getConfigBool, isDesktopMode } from "@/lib/runtime/config";
 import { supabase, isSupabaseConfigured, configureSupabaseFromRuntime } from "@/lib/supabase";
 import { add as diagLog, subscribe as diagSubscribe, getAll as diagGetAll, clear as diagClear, DiagLog } from "@/lib/diagnostics/logger";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
@@ -39,50 +38,67 @@ export function DiagnosticsPanel() {
 
   const runBootstrap = React.useCallback(async () => {
     try {
-      await initRuntimeConfig();
       configureSupabaseFromRuntime();
-      try { diagLog("success", "[Diagnostics] Runtime config initialized"); } catch {}
+      try { diagLog("success", "[Diagnostics] Supabase from env initialized"); } catch {}
     } catch (e: any) {
-      try { diagLog("error", "[Diagnostics] initRuntimeConfig failed", { error: String(e?.message || e) }); } catch {}
+      try { diagLog("error", "[Diagnostics] Supabase init failed", { error: String(e?.message || e) }); } catch {}
     }
   }, []);
 
   const loadRemoteEnvs = React.useCallback(async () => {
     try {
-      const items = await fetchRemoteEnvs();
+      // Build envs from known NEXT_PUBLIC_* keys (client-only). Next.js inlines these at build time.
+      const keys = [
+        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_CLERK_BASE_URL",
+        "NEXT_PUBLIC_CLERK_OAUTH_BASE",
+        "NEXT_PUBLIC_CLERK_HOSTED_URL",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "NEXT_PUBLIC_SUPABASE_SESSION_ENABLED",
+        "NEXT_PUBLIC_DESKTOP_DISABLE_CLERK",
+      ] as const;
+      const read = (k: (typeof keys)[number]): string | undefined => {
+        switch (k) {
+          case "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": return process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+          case "NEXT_PUBLIC_CLERK_BASE_URL": return process.env.NEXT_PUBLIC_CLERK_BASE_URL;
+          case "NEXT_PUBLIC_CLERK_OAUTH_BASE": return process.env.NEXT_PUBLIC_CLERK_OAUTH_BASE as any;
+          case "NEXT_PUBLIC_CLERK_HOSTED_URL": return process.env.NEXT_PUBLIC_CLERK_HOSTED_URL as any;
+          case "NEXT_PUBLIC_SUPABASE_URL": return process.env.NEXT_PUBLIC_SUPABASE_URL;
+          case "NEXT_PUBLIC_SUPABASE_ANON_KEY": return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          case "NEXT_PUBLIC_SUPABASE_SESSION_ENABLED": return process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED as any;
+          case "NEXT_PUBLIC_DESKTOP_DISABLE_CLERK": return process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK as any;
+        }
+      };
+      const items: RemoteEnvItem[] = keys.map((k) => ({ key: k, value: String(read(k) ?? ""), is_secret: false }));
       setEnvs(items);
+      // Normalize to logical keys without NEXT_PUBLIC_
       const map: Record<string,string> = {};
-      // Normalize NEXT_PUBLIC_* to logical keys used below
       const setIfEmpty = (k: string, v?: string) => { if (v && !(k in map)) map[k] = v; };
       for (const it of items) {
         const rawKey = String(it?.key || "").trim();
-        if (!rawKey) continue;
         const val = String((it as any)?.value ?? "");
-        if (rawKey.startsWith("NEXT_PUBLIC_")) {
-          const tail = rawKey.replace(/^NEXT_PUBLIC_/, "");
-          // Map special aliases
-          if (tail === "CLERK_CLIENT_ID" || tail === "CLERK_OAUTH_CLIENT_ID") setIfEmpty("CLERK_CLIENT_ID", val);
-          else if (tail === "CLERK_BASE_URL" || tail === "CLERK_OAUTH_BASE") setIfEmpty("CLERK_BASE_URL", val);
-          else if (tail === "SUPABASE_URL") setIfEmpty("SUPABASE_URL", val);
-          else if (tail === "SUPABASE_ANON_KEY") setIfEmpty("SUPABASE_ANON_KEY", val);
-          else if (tail === "DESKTOP_DISABLE_CLERK") setIfEmpty("DESKTOP_DISABLE_CLERK", val);
-          else if (tail === "SUPABASE_SESSION_ENABLED") setIfEmpty("SUPABASE_SESSION_ENABLED", val);
-          else if (tail === "CLERK_HOSTED_URL") setIfEmpty("CLERK_HOSTED_URL", val);
-          else if (tail === "CLERK_PUBLISHABLE_KEY") setIfEmpty("CLERK_PUBLISHABLE_KEY", val);
-        } else {
-          setIfEmpty(rawKey, val);
-        }
+        if (!rawKey) continue;
+        const tail = rawKey.replace(/^NEXT_PUBLIC_/, "");
+        if (tail === "CLERK_BASE_URL" || tail === "CLERK_OAUTH_BASE") setIfEmpty("CLERK_BASE_URL", val);
+        else if (tail === "CLERK_PUBLISHABLE_KEY") setIfEmpty("CLERK_PUBLISHABLE_KEY", val);
+        else if (tail === "CLERK_HOSTED_URL") setIfEmpty("CLERK_HOSTED_URL", val);
+        else if (tail === "SUPABASE_URL") setIfEmpty("SUPABASE_URL", val);
+        else if (tail === "SUPABASE_ANON_KEY") setIfEmpty("SUPABASE_ANON_KEY", val);
+        else if (tail === "DESKTOP_DISABLE_CLERK") setIfEmpty("DESKTOP_DISABLE_CLERK", val);
+        else if (tail === "SUPABASE_SESSION_ENABLED") setIfEmpty("SUPABASE_SESSION_ENABLED", val);
       }
       setEnvMap(map);
       try { diagLog("info", "[Diagnostics] Loaded envs from process.env", { count: items.length }); } catch {}
     } catch (e: any) {
-      try { diagLog("error", "[Diagnostics] fetchRemoteEnvs failed", { error: String(e?.message || e) }); } catch {}
+      try { diagLog("error", "[Diagnostics] env read failed", { error: String(e?.message || e) }); } catch {}
     }
   }, []);
 
   const runWellKnown = React.useCallback(async () => {
     try {
-      const base = getClerkBaseUrl();
+      const base = (process.env.NEXT_PUBLIC_CLERK_BASE_URL as string | undefined) || (process.env.NEXT_PUBLIC_CLERK_OAUTH_BASE as string | undefined);
+      if (!base) { setWellKnown({ error: "CLERK_BASE_URL not set" }); return; }
       const url = `${base.replace(/\/$/, "")}/.well-known/openid-configuration`;
       const res = await fetch(url);
       const json = await res.json().catch(() => ({}));
@@ -96,7 +112,10 @@ export function DiagnosticsPanel() {
 
   const runSessionCheck = React.useCallback(async () => {
     try {
-      const enabled = getConfigBool("SUPABASE_SESSION_ENABLED", false);
+      const enabled = (() => {
+        const v = String(process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED || "0").trim().toLowerCase();
+        return v === "1" || v === "true" || v === "yes";
+      })();
       if (!enabled) { setSessionInfo({ hasSession: false, error: "Client session disabled by config" }); return; }
       const { data, error } = await supabase.auth.getSession();
       setSessionInfo({ hasSession: !!data?.session, error: error?.message });
@@ -115,16 +134,14 @@ export function DiagnosticsPanel() {
   }, [runBootstrap, loadRemoteEnvs, runWellKnown, runSessionCheck]);
 
   const r = React.useMemo(() => {
-    const modeDesktop = isDesktopMode();
+    const t = String(envMap["DESKTOP_DISABLE_CLERK"] || "0").trim().toLowerCase();
+    const modeDesktop = t === "1" || t === "true" || t === "yes";
     const required = [
       { key: "CLERK_PUBLISHABLE_KEY", required: !modeDesktop, why: "Needed to mount ClerkProvider in web mode" },
-      { key: "CLERK_CLIENT_ID", required: true, why: "OAuth client_id for PKCE/token exchange" },
-      { key: "CLERK_BASE_URL", required: true, why: "OIDC/OAuth base URL" },
       { key: "SUPABASE_URL", required: true, why: "Supabase project URL" },
       { key: "SUPABASE_ANON_KEY", required: true, why: "Supabase anon key for client SDK" },
       { key: "DESKTOP_DISABLE_CLERK", required: true, why: "Determines desktop vs web mode (affects SSR redirect)" },
       { key: "SUPABASE_SESSION_ENABLED", required: false, why: "Optional: enable client session tests" },
-      { key: "CLERK_HOSTED_URL", required: false, why: "Optional: hosted sign-in URL for deep link" },
     ];
     const entries = required.map((req) => {
       const v = envMap[req.key];
@@ -150,6 +167,31 @@ export function DiagnosticsPanel() {
     return { modeDesktop, entries, clerkWebReady, ssrRedirectExpected };
   }, [envMap]);
 
+  const summary = React.useMemo(() => {
+    const maskUrl = (u: string) => {
+      try { const o = new URL(u); return `${o.protocol}//${o.hostname}`; } catch { return u ? "(invalid url)" : ""; }
+    };
+    const clerk = envMap["CLERK_PUBLISHABLE_KEY"] || "";
+    const clerkBase = envMap["CLERK_BASE_URL"] || "";
+    const clerkBaseValid = (() => { try { new URL(clerkBase); return true; } catch { return false; } })();
+    const supaUrl = envMap["SUPABASE_URL"] || "";
+    const anon = envMap["SUPABASE_ANON_KEY"] || "";
+    const desktop = envMap["DESKTOP_DISABLE_CLERK"] || "0";
+    const sess = envMap["SUPABASE_SESSION_ENABLED"] || "0";
+    return {
+      clerkPresent: !!clerk,
+      clerkPreview: clerk ? `${clerk.slice(0, 8)}…` : "",
+      clerkBasePresent: !!clerkBase,
+      clerkBaseValid,
+      clerkBaseValue: clerkBase,
+      supabaseUrlPresent: !!supaUrl,
+      supabaseUrlMasked: supaUrl ? maskUrl(supaUrl) : "",
+      anonPresent: !!anon,
+      desktopFlag: desktop,
+      sessionEnabledFlag: sess,
+    };
+  }, [envMap]);
+
   const onOpenLogin = async () => { try { await openHostedSignIn("metapip://auth/callback"); } catch {} };
 
   return (
@@ -168,8 +210,32 @@ export function DiagnosticsPanel() {
           <Row title="حالت دسکتاپ" ok={r.modeDesktop} detail={String(r.modeDesktop)} reason={!r.modeDesktop ? "" : "در دسکتاپ ریدایرکت سروری غیرفعال است"} />
           <Row title="Clerk Web Ready" ok={r.clerkWebReady} detail={r.clerkWebReady ? "Provider will mount" : "Missing PUBLISHABLE_KEY or desktop mode"} reason={r.clerkWebReady ? "" : "اگر وب می‌خواهید، DESKTOP_DISABLE_CLERK=0 و CLERK_PUBLISHABLE_KEY لازم است"} />
           <Row title="SSR Redirect Expected" ok={r.ssrRedirectExpected} detail={r.ssrRedirectExpected ? "Yes (/→/sign-in)" : "No (desktop mode)"} />
-          <Row title="Supabase Configured" ok={isSupabaseConfigured} detail={String(isSupabaseConfigured)} reason={isSupabaseConfigured ? "" : "initRuntimeConfig/Client setup ناقص است"} />
+          <Row title="Supabase Configured" ok={isSupabaseConfigured} detail={String(isSupabaseConfigured)} reason={isSupabaseConfigured ? "" : "Env keys or client setup is incomplete"} />
           <Row title="Supabase Session" ok={!!sessionInfo?.hasSession} detail={sessionInfo?.hasSession ? "Active" : "None"} reason={sessionInfo?.error} />
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-medium">خلاصه متغیرهای درخواستی</h2>
+        <div className="rounded border border-gray-200 dark:border-zinc-800 p-3 text-sm">
+          <div className="space-y-1">
+            <div><span className="font-medium">NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:</span> {summary.clerkPresent ? <span className="text-emerald-600">present</span> : <span className="text-red-600">missing</span>} {summary.clerkPreview && <span className="ml-2 opacity-80">({summary.clerkPreview})</span>}</div>
+            <div>
+              <span className="font-medium">CLERK_BASE_URL (from NEXT_PUBLIC_CLERK_BASE_URL / NEXT_PUBLIC_CLERK_OAUTH_BASE):</span>
+              {" "}
+              {summary.clerkBasePresent ? <span className="text-emerald-600">present</span> : <span className="text-red-600">missing</span>}
+              {summary.clerkBaseValue && (
+                <span className="ml-2 opacity-80 select-all">({summary.clerkBaseValue})</span>
+              )}
+              {summary.clerkBasePresent && !summary.clerkBaseValid && (
+                <span className="ml-2 text-red-600">invalid URL</span>
+              )}
+            </div>
+            <div><span className="font-medium">NEXT_PUBLIC_SUPABASE_URL (masked):</span> {summary.supabaseUrlPresent ? <span className="opacity-80 select-all">{summary.supabaseUrlMasked}</span> : <span className="text-red-600">missing</span>}</div>
+            <div><span className="font-medium">NEXT_PUBLIC_SUPABASE_ANON_KEY:</span> {summary.anonPresent ? <span className="text-emerald-600">present</span> : <span className="text-red-600">missing</span>}</div>
+            <div><span className="font-medium">NEXT_PUBLIC_DESKTOP_DISABLE_CLERK:</span> <span className="opacity-80">{summary.desktopFlag || "0"}</span></div>
+            <div><span className="font-medium">NEXT_PUBLIC_SUPABASE_SESSION_ENABLED:</span> <span className="opacity-80">{summary.sessionEnabledFlag || "0"}</span></div>
+          </div>
         </div>
       </section>
 
@@ -219,7 +285,7 @@ export function DiagnosticsPanel() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-medium">OIDC Discovery</h2>
-        <div className="text-xs opacity-70">آدرس: {(() => { try { return `${getClerkBaseUrl().replace(/\/$/, "")}/.well-known/openid-configuration`; } catch { return "-"; } })()}</div>
+        <div className="text-xs opacity-70">آدرس: {(() => { try { const base = (process.env.NEXT_PUBLIC_CLERK_BASE_URL as string | undefined) || (process.env.NEXT_PUBLIC_CLERK_OAUTH_BASE as string | undefined); return base ? `${base.replace(/\/$/, "")}/.well-known/openid-configuration` : "-"; } catch { return "-"; } })()}</div>
         <pre className="text-xs overflow-auto p-2 rounded bg-gray-50 dark:bg-zinc-900/30">{JSON.stringify(wellKnown, null, 2)}</pre>
       </section>
 

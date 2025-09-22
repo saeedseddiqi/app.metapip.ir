@@ -2,7 +2,6 @@
 import * as React from "react";
 import { useAuth } from "@clerk/nextjs";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { getConfigBool } from "@/lib/runtime/config";
 
 /**
  * Establishes a client-side Supabase session using the current Clerk JWT.
@@ -14,7 +13,10 @@ export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onE
   // Choose provider based on env: default to 'clerk' (TPA), allow 'oidc' if explicitly set
   const envProvider = (process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PROVIDER as string | undefined);
   const provider = ((envProvider || "clerk").toLowerCase() === "oidc") ? "oidc" : "clerk";
-  const enabled = getConfigBool("SUPABASE_SESSION_ENABLED", false);
+  const enabled = (() => {
+    const v = String(process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
 
   React.useEffect(() => {
     if (!enabled) {
