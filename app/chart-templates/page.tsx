@@ -2,12 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { isDesktopMode } from "@/lib/runtime/config";
 
 const ScreenshotPresetsPanel = dynamic(() => import("@/components/ScreenshotPresetsPanel").then(m => m.default), { ssr: false });
 
 export default function ChartTemplatesPage() {
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   if (desktopMode) {
     // In desktop mode, ClerkProvider is disabled; render content directly
     return <ScreenshotPresetsPanel />;

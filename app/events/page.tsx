@@ -1,12 +1,14 @@
 "use client";
 
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { isDesktopMode } from "@/lib/runtime/config";
 import { Logs } from "@/components/Logs";
 import { EventsStream } from "@/components/EventsStream";
 
 export default function EventsPage() {
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   if (desktopMode) {
     // In desktop mode, ClerkProvider is disabled; render content directly
     return (

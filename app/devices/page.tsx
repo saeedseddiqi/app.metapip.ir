@@ -4,7 +4,6 @@ import React from "react";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
-import { isDesktopMode } from "@/lib/runtime/config";
 import { getDevices } from "@/lib/auth/functions";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
@@ -23,7 +22,10 @@ interface DeviceRow {
 }
 
 function DevicesList() {
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   const auth = desktopMode ? null : useAuth();
   const isLoaded = desktopMode ? true : (auth as any)?.isLoaded;
   const [loading, setLoading] = React.useState(true);
@@ -160,7 +162,10 @@ function DevicesList() {
 }
 
 export default function DevicesPage() {
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   if (desktopMode) {
     return <DevicesList />;
   }

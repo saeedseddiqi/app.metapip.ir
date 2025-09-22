@@ -9,7 +9,6 @@ import { useClerkSupabaseSession } from "@/lib/auth/useClerkSupabaseSession";
 import { invoke } from "@tauri-apps/api/core";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
 import { subscribe as diagSubscribe, getAll as diagGetAll, clear as diagClear, DiagLog } from "@/lib/diagnostics/logger";
-import { isDesktopMode, getConfigBool, getClerkHostedUrl } from "@/lib/runtime/config";
 
 const Dashboard = dynamic(() => import("@/components/Dashboard").then(m => m.Dashboard), { ssr: false });
 
@@ -37,7 +36,10 @@ function fmtExp(exp?: number): string {
 }
 
 export default function DashboardPage() {
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   // Ensure client-side Supabase session when enabled (web only)
   if (!desktopMode) {
     try { useClerkSupabaseSession(); } catch {}
@@ -47,7 +49,10 @@ export default function DashboardPage() {
   const [logs, setLogs] = React.useState<string[]>([]);
   const [diagLogs, setDiagLogs] = React.useState<DiagLog[]>(() => diagGetAll());
   const [testing, setTesting] = React.useState(false);
-  const sessionEnabled = getConfigBool("SUPABASE_SESSION_ENABLED", false);
+  const sessionEnabled = (() => {
+    const v = String(process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   const [isTauri, setIsTauri] = React.useState(false);
   const [envStatus, setEnvStatus] = React.useState<any>(null);
   const [_verifyStatus, setVerifyStatus] = React.useState<"idle"|"ok"|"fail"|"na">("idle");
@@ -117,7 +122,10 @@ export default function DashboardPage() {
 
   // Utilities for deep-link debugging (desktop mode)
   const buildHostedUrl = React.useCallback(() => {
-    const base = getClerkHostedUrl("https://accounts.metapip.ir");
+    const base = (process.env.NEXT_PUBLIC_CLERK_HOSTED_URL as string | undefined)
+      || (process.env.NEXT_PUBLIC_CLERK_BASE_URL as string | undefined)
+      || (process.env.NEXT_PUBLIC_CLERK_OAUTH_BASE as string | undefined)
+      || "https://accounts.metapip.ir";
     const url = new URL(`${base.replace(/\/$/, "")}/sign-in`);
     const redirect = "metapip://auth/callback";
     url.searchParams.set("redirect_url", redirect);

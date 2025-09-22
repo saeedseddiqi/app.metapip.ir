@@ -6,11 +6,13 @@ import ThemeToggle from "./ThemeToggle";
 import { BoltIcon } from "@heroicons/react/24/solid";
 import { UserButton, SignedIn } from "@clerk/nextjs";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
-import { isDesktopMode } from "@/lib/runtime/config";
+// Read desktop mode flag directly from env (no runtime config)
 
 export default function HeaderShell() {
-
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
 
   if (desktopMode) {
     const onLogin = async () => {
