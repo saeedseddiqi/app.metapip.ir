@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { fetchRemoteEnvs, initRuntimeConfig, getClerkBaseUrl, getClerkClientId, getClerkHostedUrl, getClerkPublishableKey, getConfigBool, isDesktopMode } from "@/lib/runtime/config";
+import { fetchRemoteEnvs, initRuntimeConfig, getClerkBaseUrl, getConfigBool, isDesktopMode } from "@/lib/runtime/config";
 import { supabase, isSupabaseConfigured, configureSupabaseFromRuntime } from "@/lib/supabase";
 import { add as diagLog, subscribe as diagSubscribe, getAll as diagGetAll, clear as diagClear, DiagLog } from "@/lib/diagnostics/logger";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
@@ -26,8 +26,6 @@ function Row({ title, ok, detail, reason }: { title: string; ok: boolean; detail
 }
 
 export function DiagnosticsPanel() {
-  const [ready, setReady] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
   const [envs, setEnvs] = React.useState<RemoteEnvItem[]>([]);
   const [envMap, setEnvMap] = React.useState<Record<string,string>>({});
   const [logs, setLogs] = React.useState<DiagLog[]>(() => diagGetAll());
@@ -44,10 +42,8 @@ export function DiagnosticsPanel() {
       await initRuntimeConfig("prod", { withRemoteEnvs: true, override: false });
       configureSupabaseFromRuntime();
       try { diagLog("success", "[Diagnostics] Runtime config initialized"); } catch {}
-      setReady(true);
     } catch (e: any) {
       try { diagLog("error", "[Diagnostics] initRuntimeConfig failed", { error: String(e?.message || e) }); } catch {}
-      setReady(false);
     }
   }, []);
 

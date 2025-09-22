@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
-import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
+import { SignedIn, useAuth } from "@clerk/nextjs";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { isDesktopMode, getConfigBool } from "@/lib/runtime/config";
 

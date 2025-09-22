@@ -20,7 +20,6 @@ const BOOTSTRAP_SUPABASE_ANON_KEY = "PUBLIC_ANON_KEY_LIMITED";
 export type AppConfigMap = Record<string, string>;
 
 let runtimeConfig: AppConfigMap | null = null;
-let lastEnv: string | null = null;
 let bootstrapClient: SupabaseClient | null = null;
 
 // Fixed remote envs API endpoint (no .env needed)
@@ -138,7 +137,6 @@ export async function initRuntimeConfig(
     }
   }
   runtimeConfig = cfg;
-  lastEnv = environment;
   try {
     log("success", "[Config] Runtime config loaded", { environment, keys: Object.keys(cfg) });
   } catch {}
