@@ -1,57 +1,19 @@
 "use client";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { add as log } from "@/lib/diagnostics/logger";
 
 // IMPORTANT
-// This module enables a runtime-only configuration model.
-// - No local .env is required for app runtime behavior.
-// - A LIMITED public anon key is embedded ONLY for bootstrapping read-only access
-//   to the `app_config` table (guarded by RLS). This anon key MUST have the
-//   least privileges required (read-only, table-limited). Do NOT grant write.
-// - All sensitive values (PKCE verifier, id_token) are only kept in memory.
-// - After fetching config, consumers should use the getters below.
-
-// TODO: Replace the placeholders below with your Supabase project's public URL
-// and a limited, read-only anon key that can only read the `app_config` table via RLS.
-const BOOTSTRAP_SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
-const BOOTSTRAP_SUPABASE_ANON_KEY = "PUBLIC_ANON_KEY_LIMITED";
+// This module now reads configuration directly from process.env (including NEXT_PUBLIC_*).
+// No remote envs API or Supabase bootstrap is used anymore.
 
 export type AppConfigMap = Record<string, string>;
 
 let runtimeConfig: AppConfigMap | null = null;
-let bootstrapClient: SupabaseClient | null = null;
 
-// Fixed remote envs API endpoint (no .env needed)
-const REMOTE_ENVS_URL = "https://metapip-envs.vercel.app/api/envs";
+// No remote envs API; envs are read from process.env
 
 // Remote envs item shape from serverless endpoint
-export type RemoteEnvItem = {
-  key: string;
-  value: string;
-  is_secret?: boolean | null;
-};
-
-function getBootstrapClient(): SupabaseClient {
-  if (!bootstrapClient) {
-    bootstrapClient = createClient(BOOTSTRAP_SUPABASE_URL, BOOTSTRAP_SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-  }
-  return bootstrapClient;
-}
-
-function isBootstrapSupabaseConfigured(): boolean {
-  try {
-    if (!BOOTSTRAP_SUPABASE_URL || !BOOTSTRAP_SUPABASE_ANON_KEY) return false;
-    if (BOOTSTRAP_SUPABASE_URL.includes("YOUR_PROJECT") || BOOTSTRAP_SUPABASE_ANON_KEY.includes("PUBLIC_ANON_KEY_LIMITED")) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
+export type RemoteEnvItem = { key: string; value: string; is_secret?: boolean | null };
 
 export function isRuntimeConfigReady(): boolean {
   return !!runtimeConfig;
@@ -66,80 +28,71 @@ export function getConfigValue(key: string, fallback?: string): string | undefin
   return (runtimeConfig && runtimeConfig[key]) || fallback;
 }
 
-// Fetch remote envs from the metapip-envs serverless endpoint
-export async function fetchRemoteEnvs(remoteUrl?: string): Promise<RemoteEnvItem[]> {
-  try {
-    const url = remoteUrl || REMOTE_ENVS_URL;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    const items = Array.isArray(json?.envs) ? (json.envs as any[]) : [];
-    return items as RemoteEnvItem[];
-  } catch (e: any) {
-    try {
-      log("warn", "[Config] fetchRemoteEnvs failed", { error: String(e?.message || e) });
-    } catch {}
-    return [];
+function firstEnv(...keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = process.env[k];
+    if (typeof v === "string" && v.length > 0) return v;
   }
+  return undefined;
 }
 
-function mergeRemoteEnvsIntoConfig(cfg: AppConfigMap, items: RemoteEnvItem[], override = false) {
-  let applied = 0;
-  for (const it of items) {
-    const k = String(it?.key || "").trim();
-    if (!k) continue;
-    const secret = Boolean((it as any)?.is_secret);
-    if (secret) continue; // never expose secrets in frontend runtime config
-    if (override || !(k in cfg)) {
-      cfg[k] = String((it as any)?.value ?? "");
-      applied += 1;
-    }
+// Return envs from process.env so DiagnosticsPanel can display them without network
+export async function fetchRemoteEnvs(): Promise<RemoteEnvItem[]> {
+  const keys = [
+    // Clerk
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_CLERK_CLIENT_ID",
+    "NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID",
+    "NEXT_PUBLIC_CLERK_BASE_URL",
+    "NEXT_PUBLIC_CLERK_OAUTH_BASE",
+    "NEXT_PUBLIC_CLERK_HOSTED_URL",
+    // Supabase
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL",
+    // App flags
+    "NEXT_PUBLIC_DESKTOP_DISABLE_CLERK",
+    "NEXT_PUBLIC_SUPABASE_SESSION_ENABLED",
+    "NEXT_PUBLIC_TOKEN_FILE",
+    "NEXT_PUBLIC_DISABLE_TOKEN_FILE",
+    "NEXT_PUBLIC_TOKEN_DIR",
+  ];
+  const out: RemoteEnvItem[] = [];
+  for (const k of keys) {
+    const v = process.env[k];
+    if (v !== undefined) out.push({ key: k, value: String(v), is_secret: false });
   }
-  try {
-    log("info", "[Config] Remote envs merged", { applied, override });
-  } catch {}
+  return out;
 }
 
-export async function fetchAppConfig(environment = "prod"): Promise<AppConfigMap> {
-  const sb = getBootstrapClient();
-  const { data, error } = await sb
-    .from("app_config")
-    .select("key,value,environment")
-    .eq("environment", environment);
-  if (error) throw error;
+export async function initRuntimeConfig(): Promise<AppConfigMap> {
   const cfg: AppConfigMap = {};
-  (data || []).forEach((row: any) => {
-    if (row && row.key) cfg[row.key] = String(row.value ?? "");
-  });
-  return cfg;
-}
+  // Clerk
+  const publishable = firstEnv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "CLERK_PUBLISHABLE_KEY");
+  const clientId = firstEnv("NEXT_PUBLIC_CLERK_CLIENT_ID", "NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID", "CLERK_CLIENT_ID");
+  const baseUrl = firstEnv("NEXT_PUBLIC_CLERK_BASE_URL", "NEXT_PUBLIC_CLERK_OAUTH_BASE", "CLERK_BASE_URL");
+  const hostedUrl = firstEnv("NEXT_PUBLIC_CLERK_HOSTED_URL", "CLERK_HOSTED_URL");
 
-export async function initRuntimeConfig(
-  environment = "prod",
-  opts?: { withRemoteEnvs?: boolean; remoteUrl?: string; override?: boolean }
-): Promise<AppConfigMap> {
-  const cfg: AppConfigMap = {};
-  // 1) Optionally load remote envs first to allow bootstrap without Supabase
-  if (opts?.withRemoteEnvs) {
-    const items = await fetchRemoteEnvs(opts?.remoteUrl);
-    mergeRemoteEnvsIntoConfig(cfg, items, Boolean(opts?.override));
-  }
-  // 2) If bootstrap client is configured, merge app_config values
-  if (isBootstrapSupabaseConfigured()) {
-    try {
-      const supaCfg = await fetchAppConfig(environment);
-      // Remote envs should not be overridden unless override flag was set above
-      Object.entries(supaCfg).forEach(([k, v]) => {
-        if (!(k in cfg)) cfg[k] = v;
-      });
-    } catch (e: any) {
-      try { log("warn", "[Config] fetchAppConfig failed; using remote-only config", { error: String(e?.message || e) }); } catch {}
-    }
-  }
+  if (publishable) cfg["CLERK_PUBLISHABLE_KEY"] = publishable;
+  if (clientId) cfg["CLERK_CLIENT_ID"] = clientId;
+  if (baseUrl) cfg["CLERK_BASE_URL"] = baseUrl;
+  if (hostedUrl) cfg["CLERK_HOSTED_URL"] = hostedUrl;
+
+  // Supabase
+  const supaUrl = firstEnv("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL");
+  const supaAnon = firstEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY");
+  if (supaUrl) cfg["SUPABASE_URL"] = supaUrl;
+  if (supaAnon) cfg["SUPABASE_ANON_KEY"] = supaAnon;
+
+  // App flags
+  const desktopDisable = firstEnv("NEXT_PUBLIC_DESKTOP_DISABLE_CLERK", "DESKTOP_DISABLE_CLERK") ?? "0";
+  cfg["DESKTOP_DISABLE_CLERK"] = desktopDisable;
+
+  const sessionEnabled = firstEnv("NEXT_PUBLIC_SUPABASE_SESSION_ENABLED");
+  if (sessionEnabled) cfg["SUPABASE_SESSION_ENABLED"] = sessionEnabled;
+
   runtimeConfig = cfg;
-  try {
-    log("success", "[Config] Runtime config loaded", { environment, keys: Object.keys(cfg) });
-  } catch {}
+  try { log("success", "[Config] Runtime config loaded", { keys: Object.keys(cfg) }); } catch {}
   return cfg;
 }
 

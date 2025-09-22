@@ -22,6 +22,26 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL && process.env.SUPABASE_URL)
   process.env.NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL = `${base}/functions/v1`;
 }
 
+// Bridge Clerk variables to NEXT_PUBLIC_ for client usage
+if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_PUBLISHABLE_KEY) {
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY;
+}
+if (!process.env.NEXT_PUBLIC_CLERK_CLIENT_ID && process.env.CLERK_CLIENT_ID) {
+  process.env.NEXT_PUBLIC_CLERK_CLIENT_ID = process.env.CLERK_CLIENT_ID;
+}
+if (!process.env.NEXT_PUBLIC_CLERK_BASE_URL && process.env.CLERK_BASE_URL) {
+  process.env.NEXT_PUBLIC_CLERK_BASE_URL = process.env.CLERK_BASE_URL;
+}
+if (!process.env.NEXT_PUBLIC_CLERK_HOSTED_URL && process.env.CLERK_HOSTED_URL) {
+  process.env.NEXT_PUBLIC_CLERK_HOSTED_URL = process.env.CLERK_HOSTED_URL;
+}
+if (!process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK && process.env.DESKTOP_DISABLE_CLERK) {
+  process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK = process.env.DESKTOP_DISABLE_CLERK;
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED && process.env.SUPABASE_SESSION_ENABLED) {
+  process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED = process.env.SUPABASE_SESSION_ENABLED;
+}
+
 const nextConfig: NextConfig = {
   // Middleware requires dynamic runtime; do not use static export
   reactStrictMode: true,

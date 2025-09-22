@@ -28,7 +28,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     (async () => {
       try {
-        await initRuntimeConfig("prod", { withRemoteEnvs: true, override: false });
+        await initRuntimeConfig();
         configureSupabaseFromRuntime();
         // Derive Clerk publishable key only in web mode; show helpful error if missing
         try {
@@ -38,7 +38,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           }
         } catch (e: any) {
           setWebKey(null);
-          setBootError("CLERK_PUBLISHABLE_KEY missing in runtime config. Define it in your envs API (not secret) and restart dev or wait 60s cache TTL.");
+          setBootError("CLERK_PUBLISHABLE_KEY missing. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY in .env.local or Vercel Project Settings (Environment Variables).");
         }
         setReady(true);
         try { diagLog("success", "[Bootstrap] Runtime config + Supabase ready"); } catch {}
@@ -205,9 +205,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
             try { diagLog("error", "[Auth] Callback without token or code", { err: errStr || null }); } catch {}
             return;
           }
-          // Create Supabase session using OIDC id_token (Clerk)
+          // Create Supabase session using Clerk id_token
           try {
-            const { error } = await supabase.auth.signInWithIdToken({ provider: "oidc" as any, token: oidcToken });
+            const prov = (process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PROVIDER || "oidc").toString().toLowerCase() === "clerk" ? "clerk" : "oidc";
+            const { error } = await supabase.auth.signInWithIdToken({ provider: prov as any, token: oidcToken });
             if (error) {
               console.error("[DeepLink] supabase signIn error", error);
               try { diagLog("error", "[Auth] Supabase signInWithIdToken error", { error }); } catch {}

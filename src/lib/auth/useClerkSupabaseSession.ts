@@ -2,6 +2,7 @@
 import * as React from "react";
 import { useAuth } from "@clerk/nextjs";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { getConfigBool } from "@/lib/runtime/config";
 
 /**
  * Establishes a client-side Supabase session using the current Clerk JWT.
@@ -10,10 +11,10 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onError?: (e: any) => void }) {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const triedRef = React.useRef(false);
-  // Supabase expects provider 'oidc' for custom OIDC (Clerk). Force it here to avoid runtime misconfig.
+  // Choose provider based on env: default to 'clerk' (TPA), allow 'oidc' if explicitly set
   const envProvider = (process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PROVIDER as string | undefined);
-  const provider = "oidc" as const;
-  const enabled = String(process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED || "").toLowerCase() === "true";
+  const provider = ((envProvider || "clerk").toLowerCase() === "oidc") ? "oidc" : "clerk";
+  const enabled = getConfigBool("SUPABASE_SESSION_ENABLED", false);
 
   React.useEffect(() => {
     if (!enabled) {
@@ -29,9 +30,6 @@ export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onE
         let token = await getToken?.({ template: "supabase" } as any);
         if (!token) token = await (getToken?.({ template: "session" } as any) as Promise<string | null>);
         if (!token) throw new Error("Clerk token not available");
-        if (envProvider && envProvider.toLowerCase() !== "oidc") {
-          console.warn(`[SupabaseSession] Overriding NEXT_PUBLIC_SUPABASE_IDENTITY_PROVIDER='${envProvider}' to 'oidc'`);
-        }
         const { error } = await supabase.auth.signInWithIdToken({ provider: provider as any, token });
         if (error) throw error;
         const { data: sessionRes, error: sessionErr } = await supabase.auth.getSession();

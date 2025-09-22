@@ -39,7 +39,7 @@ export function DiagnosticsPanel() {
 
   const runBootstrap = React.useCallback(async () => {
     try {
-      await initRuntimeConfig("prod", { withRemoteEnvs: true, override: false });
+      await initRuntimeConfig();
       configureSupabaseFromRuntime();
       try { diagLog("success", "[Diagnostics] Runtime config initialized"); } catch {}
     } catch (e: any) {
@@ -52,13 +52,29 @@ export function DiagnosticsPanel() {
       const items = await fetchRemoteEnvs();
       setEnvs(items);
       const map: Record<string,string> = {};
+      // Normalize NEXT_PUBLIC_* to logical keys used below
+      const setIfEmpty = (k: string, v?: string) => { if (v && !(k in map)) map[k] = v; };
       for (const it of items) {
-        const k = String(it?.key || "").trim();
-        if (!k) continue;
-        map[k] = String((it as any)?.value ?? "");
+        const rawKey = String(it?.key || "").trim();
+        if (!rawKey) continue;
+        const val = String((it as any)?.value ?? "");
+        if (rawKey.startsWith("NEXT_PUBLIC_")) {
+          const tail = rawKey.replace(/^NEXT_PUBLIC_/, "");
+          // Map special aliases
+          if (tail === "CLERK_CLIENT_ID" || tail === "CLERK_OAUTH_CLIENT_ID") setIfEmpty("CLERK_CLIENT_ID", val);
+          else if (tail === "CLERK_BASE_URL" || tail === "CLERK_OAUTH_BASE") setIfEmpty("CLERK_BASE_URL", val);
+          else if (tail === "SUPABASE_URL") setIfEmpty("SUPABASE_URL", val);
+          else if (tail === "SUPABASE_ANON_KEY") setIfEmpty("SUPABASE_ANON_KEY", val);
+          else if (tail === "DESKTOP_DISABLE_CLERK") setIfEmpty("DESKTOP_DISABLE_CLERK", val);
+          else if (tail === "SUPABASE_SESSION_ENABLED") setIfEmpty("SUPABASE_SESSION_ENABLED", val);
+          else if (tail === "CLERK_HOSTED_URL") setIfEmpty("CLERK_HOSTED_URL", val);
+          else if (tail === "CLERK_PUBLISHABLE_KEY") setIfEmpty("CLERK_PUBLISHABLE_KEY", val);
+        } else {
+          setIfEmpty(rawKey, val);
+        }
       }
       setEnvMap(map);
-      try { diagLog("info", "[Diagnostics] Loaded remote envs", { count: items.length }); } catch {}
+      try { diagLog("info", "[Diagnostics] Loaded envs from process.env", { count: items.length }); } catch {}
     } catch (e: any) {
       try { diagLog("error", "[Diagnostics] fetchRemoteEnvs failed", { error: String(e?.message || e) }); } catch {}
     }
@@ -158,7 +174,7 @@ export function DiagnosticsPanel() {
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-lg font-medium">اعتبارسنجی کلیدهای محیط (از API)</h2>
+        <h2 className="text-lg font-medium">اعتبارسنجی کلیدهای محیط (از env)</h2>
         <div className="rounded border border-gray-200 dark:border-zinc-800">
           <div className="grid grid-cols-12 gap-2 p-2 bg-gray-50 dark:bg-zinc-900/40 text-xs font-semibold">
             <div className="col-span-3">کلید</div>
@@ -178,7 +194,7 @@ export function DiagnosticsPanel() {
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-lg font-medium">فهرست کامل env از API</h2>
+        <h2 className="text-lg font-medium">فهرست env از process.env</h2>
         <div className="overflow-auto rounded border border-gray-200 dark:border-zinc-800">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 dark:bg-zinc-900/50">
