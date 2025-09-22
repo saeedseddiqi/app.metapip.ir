@@ -24,7 +24,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [webKey, setWebKey] = React.useState<string | null>(null);
   const desktopMode = isDesktopMode();
   const router = useRouter();
-  // Runtime bootstrap: fetch config from Supabase and initialize Supabase client
+  // Bootstrap: read config from env and initialize Supabase client (no runtime/API fetch)
   React.useEffect(() => {
     (async () => {
       try {
