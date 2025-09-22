@@ -3,7 +3,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { createPkcePair } from "@/lib/auth/pkce";
 import { add as diagLog } from "@/lib/diagnostics/logger";
-import { getClerkBaseUrl, getClerkClientId, isRuntimeConfigReady } from "@/lib/runtime/config";
 import { setPkce } from "@/lib/auth/pkceStore";
 
 export type DeepLinkHandler = (url: string) => void;
@@ -23,10 +22,9 @@ export function parseClerkToken(deepLinkUrl: string): { token?: string; sessionI
 }
 
 export async function openHostedSignIn(redirectUrl = "metapip://auth/callback") {
-  if (!isRuntimeConfigReady()) throw new Error("Runtime config not loaded");
-  // OAuth PKCE flow (no fallback). All values from runtime config.
-  const oauthBase = getClerkBaseUrl();
-  const clientId = getClerkClientId();
+  // OAuth PKCE flow using env-only values (no runtime/config).
+  const oauthBase = getClerkBaseUrlFromEnv();
+  const clientId = getClerkClientIdFromEnv();
   const auth = new URL(`${oauthBase.replace(/\/$/, "")}/oauth/authorize`);
   const { verifier, challenge, method } = await createPkcePair();
   // random state
@@ -125,9 +123,8 @@ export function useDeepLinkListener(onUrl: DeepLinkHandler) {
 
 // Exchange OAuth code for tokens at Clerk token endpoint
 export async function exchangeClerkOAuthCode(code: string, codeVerifier: string, redirectUri: string): Promise<{ id_token?: string; access_token?: string; refresh_token?: string; raw?: any; error?: any }> {
-  if (!isRuntimeConfigReady()) throw new Error("Runtime config not loaded");
-  const oauthBase = getClerkBaseUrl();
-  const clientId = getClerkClientId();
+  const oauthBase = getClerkBaseUrlFromEnv();
+  const clientId = getClerkClientIdFromEnv();
   const tokenUrl = `${oauthBase.replace(/\/$/, "")}/oauth/token`;
   try { diagLog("info", "[Auth] Exchanging OAuth code for tokens", { base: oauthBase, hasClientId: true }); } catch {}
   const body = new URLSearchParams({
@@ -149,4 +146,20 @@ export async function exchangeClerkOAuthCode(code: string, codeVerifier: string,
   }
   try { diagLog("success", "[Auth] Token exchange succeeded"); } catch {}
   return { id_token: json.id_token, access_token: json.access_token, refresh_token: json.refresh_token, raw: json };
+}
+
+// Helpers to read Clerk config from env (client-safe NEXT_PUBLIC_*), with clear errors if missing
+function getClerkBaseUrlFromEnv(): string {
+  const base = (process.env.NEXT_PUBLIC_CLERK_BASE_URL as string | undefined)
+    || (process.env.NEXT_PUBLIC_CLERK_OAUTH_BASE as string | undefined)
+    || (process.env.NEXT_PUBLIC_CLERK_HOSTED_URL as string | undefined);
+  if (!base) throw new Error("CLERK_BASE_URL missing. Set NEXT_PUBLIC_CLERK_BASE_URL (or NEXT_PUBLIC_CLERK_OAUTH_BASE) in env.");
+  return base;
+}
+
+function getClerkClientIdFromEnv(): string {
+  const id = (process.env.NEXT_PUBLIC_CLERK_CLIENT_ID as string | undefined)
+    || (process.env.NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID as string | undefined);
+  if (!id) throw new Error("CLERK_CLIENT_ID missing. Set NEXT_PUBLIC_CLERK_CLIENT_ID (or NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID) in env.");
+  return id;
 }

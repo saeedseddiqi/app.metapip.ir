@@ -3,7 +3,6 @@
 import * as React from "react";
 import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { getConfigBool } from "@/lib/runtime/config";
 import { useClerkSupabaseSession } from "@/lib/auth/useClerkSupabaseSession";
 
 export default function TestAuthPage() {
@@ -11,7 +10,10 @@ export default function TestAuthPage() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const [logs, setLogs] = React.useState<string[]>([]);
   const [testing, setTesting] = React.useState(false);
-  const sessionEnabled = getConfigBool("SUPABASE_SESSION_ENABLED", false);
+  const sessionEnabled = (() => {
+    const v = String(process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
 
   const log = React.useCallback((m: string) => setLogs((x) => [m, ...x].slice(0, 200)), []);
 
