@@ -99,11 +99,16 @@ export function DiagnosticsPanel() {
     try {
       const base = (process.env.NEXT_PUBLIC_CLERK_BASE_URL as string | undefined) || (process.env.NEXT_PUBLIC_CLERK_OAUTH_BASE as string | undefined);
       if (!base) { setWellKnown({ error: "CLERK_BASE_URL not set" }); return; }
-      const url = `${base.replace(/\/$/, "")}/.well-known/openid-configuration`;
-      const res = await fetch(url);
+      const url = `/api/oidc-discovery?base=${encodeURIComponent(base)}`;
+      const res = await fetch(url, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
-      setWellKnown(json);
-      try { diagLog("success", "[Diagnostics] Fetched OIDC discovery", { status: res.status }); } catch {}
+      if (res.ok) {
+        setWellKnown(json?.data ?? json);
+        try { diagLog("success", "[Diagnostics] Fetched OIDC discovery", { status: json?.status ?? res.status }); } catch {}
+      } else {
+        setWellKnown({ error: json?.error || `HTTP ${res.status}`, status: json?.status ?? res.status });
+        try { diagLog("error", "[Diagnostics] OIDC discovery failed", { status: json?.status ?? res.status, error: json?.error || "Unknown" }); } catch {}
+      }
     } catch (e: any) {
       setWellKnown({ error: String(e?.message || e) });
       try { diagLog("error", "[Diagnostics] OIDC discovery failed", { error: String(e?.message || e) }); } catch {}
