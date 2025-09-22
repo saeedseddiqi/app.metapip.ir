@@ -4,11 +4,13 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, SignedIn, SignedOut } from "@clerk/nextjs";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
-import { isDesktopMode } from "@/lib/runtime/config";
 
 export default function IndexPage() {
   const router = useRouter();
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   if (desktopMode) {
     const onLogin = async () => {
       try { await openHostedSignIn("metapip://auth/callback"); } catch {}

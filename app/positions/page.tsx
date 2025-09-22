@@ -3,14 +3,16 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { isDesktopMode } from "@/lib/runtime/config";
 
 const OpenPositionsTable = dynamic(() => import("@/components/OpenPositionsTable"), { ssr: false });
 const TradesJournalTable = dynamic(() => import("@/components/TradesJournalTable"), { ssr: false });
 
 export default function PositionsPage() {
   const [tab, setTab] = useState<"open" | "journal">("open");
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
 
   // In desktop mode, ClerkProvider is disabled; render content directly without SignedIn/SignedOut
   if (desktopMode) {

@@ -2,12 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { isDesktopMode } from "@/lib/runtime/config";
 
 const RiskSettings = dynamic(() => import("@/components/RiskSettings").then(m => m.RiskSettings), { ssr: false });
 
 export default function RiskPage() {
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   if (desktopMode) {
     return (
       <div className="space-y-6" dir="rtl">

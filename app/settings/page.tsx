@@ -4,14 +4,19 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import { SignedIn, useAuth } from "@clerk/nextjs";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { isDesktopMode, getConfigBool } from "@/lib/runtime/config";
 
 const Settings = dynamic(() => import("@/components/Settings").then(m => m.Settings), { ssr: false });
 
 export default function SettingsPage() {
-  const desktopMode = isDesktopMode();
+  const desktopMode = (() => {
+    const v = String(process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   const { isLoaded, isSignedIn } = useAuth();
-  const sessionEnabled = getConfigBool("SUPABASE_SESSION_ENABLED", false);
+  const sessionEnabled = (() => {
+    const v = String(process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED || "0").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
   const [sbStatus, setSbStatus] = React.useState<"na"|"ok"|"fail"|"disabled">("na");
   const [sbMsg, setSbMsg] = React.useState<string>("");
 
