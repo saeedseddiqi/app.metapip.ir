@@ -1,5 +1,12 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function PresetsPage() {
-  redirect("/chart-templates");
+  const router = useRouter();
+  useEffect(() => {
+    try { router.replace("/chart-templates"); } catch {}
+  }, [router]);
+  return null;
 }
