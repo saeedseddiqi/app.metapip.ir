@@ -26,7 +26,8 @@ function ensureClient(): SupabaseClient {
       try { diagLog("success", "[Supabase] Client initialized from Tauri env", { url: maskUrl(url) }); } catch {}
       return internalClient;
     }
-    throw new Error("Supabase env not loaded in desktop. Call configureSupabaseForDesktop() early at app startup.");
+    // Fallback to build-time env if desktop env is not yet loaded (avoids early throw during first render)
+    try { diagLog("warn", "[Supabase] Tauri env not loaded yet; falling back to process.env"); } catch {}
   }
   // Web fallback: read from build-time env
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").toString();
