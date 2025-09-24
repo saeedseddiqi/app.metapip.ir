@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { supabase, isSupabaseConfigured, configureSupabaseFromRuntime } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured, configureSupabaseFromRuntime, configureSupabaseForDesktop } from "@/lib/supabase";
 import { add as diagLog, subscribe as diagSubscribe, getAll as diagGetAll, clear as diagClear, DiagLog } from "@/lib/diagnostics/logger";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
+import { loadDesktopEnv, readDesktopEnv } from "@/lib/desktopEnv";
+import { invoke } from "@tauri-apps/api/core";
 
 export type RemoteEnvItem = { key: string; value: string; is_secret?: boolean | null };
 
@@ -30,6 +32,9 @@ export function DiagnosticsPanel() {
   const [logs, setLogs] = React.useState<DiagLog[]>(() => diagGetAll());
   const [wellKnown, setWellKnown] = React.useState<any>(null);
   const [sessionInfo, setSessionInfo] = React.useState<{ hasSession: boolean; error?: string } | null>(null);
+  const [desktopEnv, setDesktopEnv] = React.useState<Record<string,string>>({});
+  const [tauriToken, setTauriToken] = React.useState<string | null>(null);
+  const [isTauri, setIsTauri] = React.useState(false);
 
   React.useEffect(() => {
     const unsub = diagSubscribe((l) => setLogs(l));
@@ -38,8 +43,17 @@ export function DiagnosticsPanel() {
 
   const runBootstrap = React.useCallback(async () => {
     try {
-      configureSupabaseFromRuntime();
-      try { diagLog("success", "[Diagnostics] Supabase from env initialized"); } catch {}
+      const t = typeof window !== "undefined" && Boolean((window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__);
+      setIsTauri(t);
+      if (t) {
+        await loadDesktopEnv();
+        setDesktopEnv(readDesktopEnv());
+        await configureSupabaseForDesktop();
+        try { diagLog("success", "[Diagnostics] Supabase initialized from Tauri env"); } catch {}
+      } else {
+        configureSupabaseFromRuntime();
+        try { diagLog("success", "[Diagnostics] Supabase from process.env initialized"); } catch {}
+      }
     } catch (e: any) {
       try { diagLog("error", "[Diagnostics] Supabase init failed", { error: String(e?.message || e) }); } catch {}
     }
@@ -90,6 +104,13 @@ export function DiagnosticsPanel() {
       }
       setEnvMap(map);
       try { diagLog("info", "[Diagnostics] Loaded envs from process.env", { count: items.length }); } catch {}
+      // If Tauri, also show runtime env from backend
+      const t = typeof window !== "undefined" && Boolean((window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__);
+      if (t) {
+        const de = readDesktopEnv();
+        setDesktopEnv(de);
+        try { diagLog("info", "[Diagnostics] Loaded Tauri public envs", { keys: Object.keys(de).length }); } catch {}
+      }
     } catch (e: any) {
       try { diagLog("error", "[Diagnostics] env read failed", { error: String(e?.message || e) }); } catch {}
     }
@@ -128,6 +149,33 @@ export function DiagnosticsPanel() {
       setSessionInfo({ hasSession: false, error: String(e?.message || e) });
     }
   }, []);
+
+  const testClerkToSupabase = React.useCallback(async () => {
+    try {
+      // اگر سشن نداریم، کاربر باید ابتدا ورود را انجام دهد (PKCE یا OIDC)
+      const { data } = await supabase.auth.getSession();
+      if (!data?.session) {
+        try { diagLog("error", "[Test] No Supabase session. Please sign in first from Providers/DeepLink."); } catch {}
+        setSessionInfo({ hasSession: false, error: "No Supabase session" });
+        return;
+      }
+      // تست توکن سمت Tauri (JWT persisted)
+      if (isTauri) {
+        try {
+          const tok = await invoke<string>("load_secure_token", { accountId: null } as any);
+          const ok = tok && typeof tok === "string" && !tok.startsWith("ERR:") && tok.trim().length > 0;
+          setTauriToken(ok ? tok : null);
+          try { diagLog(ok ? "success" : "warn", ok ? "[Test] Secure token found in keyring" : "[Test] Secure token missing in keyring"); } catch {}
+        } catch (e) {
+          setTauriToken(null);
+          try { diagLog("error", "[Test] load_secure_token failed", { error: String((e as any)?.message || e) }); } catch {}
+        }
+      }
+      setSessionInfo({ hasSession: true });
+    } catch (e: any) {
+      setSessionInfo({ hasSession: false, error: String(e?.message || e) });
+    }
+  }, [isTauri]);
 
   React.useEffect(() => {
     (async () => {
@@ -210,6 +258,17 @@ export function DiagnosticsPanel() {
       </div>
 
       <section className="space-y-2">
+        <h2 className="text-lg font-medium">جمع‌بندی سریع</h2>
+        <div className="rounded border border-gray-200 dark:border-zinc-800">
+          <Row title="محیط Tauri" ok={isTauri} detail={isTauri ? "Desktop" : "Web"} reason={!isTauri ? "در حالت وب از envهای build-time استفاده می‌شود" : ""} />
+          <Row title="env دسکتاپ (NEXT_PUBLIC_*)" ok={isTauri ? Object.keys(desktopEnv||{}).length>0 : true} detail={isTauri ? `${Object.keys(desktopEnv||{}).length} keys` : "-"} reason={isTauri && Object.keys(desktopEnv||{}).length===0 ? "Settings → Test fetch را اجرا کنید" : ""} />
+          <Row title="Supabase Configured" ok={isSupabaseConfigured} detail={String(isSupabaseConfigured)} reason={isSupabaseConfigured ? "" : "env یا مقداردهی کلاینت ناقص است"} />
+          <Row title="Supabase Session" ok={!!sessionInfo?.hasSession} detail={sessionInfo?.hasSession ? "Active" : "None"} reason={sessionInfo?.error || (!sessionInfo?.hasSession ? "ابتدا وارد شوید (PKCE/OIDC)" : "")} />
+          <Row title="توکن امن در Tauri" ok={isTauri ? !!tauriToken : true} detail={isTauri ? (tauriToken ? `${tauriToken.slice(0,12)}…` : "None") : "-"} reason={isTauri && !tauriToken ? "پس از ایجاد سشن، توکن باید در Keyring ذخیره شود" : ""} />
+        </div>
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-medium">وضعیت کلی</h2>
         <div className="rounded border border-gray-200 dark:border-zinc-800">
           <Row title="حالت دسکتاپ" ok={r.modeDesktop} detail={String(r.modeDesktop)} reason={!r.modeDesktop ? "" : "در دسکتاپ ریدایرکت سروری غیرفعال است"} />
@@ -240,6 +299,37 @@ export function DiagnosticsPanel() {
             <div><span className="font-medium">NEXT_PUBLIC_SUPABASE_ANON_KEY:</span> {summary.anonPresent ? <span className="text-emerald-600">present</span> : <span className="text-red-600">missing</span>}</div>
             <div><span className="font-medium">NEXT_PUBLIC_DESKTOP_DISABLE_CLERK:</span> <span className="opacity-80">{summary.desktopFlag || "0"}</span></div>
             <div><span className="font-medium">NEXT_PUBLIC_SUPABASE_SESSION_ENABLED:</span> <span className="opacity-80">{summary.sessionEnabledFlag || "0"}</span></div>
+          </div>
+        </div>
+      </section>
+
+      {isTauri && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-medium">env دریافتی از Tauri (فقط NEXT_PUBLIC_)</h2>
+          <pre className="text-xs overflow-auto p-2 rounded bg-gray-50 dark:bg-zinc-900/30">{JSON.stringify(desktopEnv, null, 2)}</pre>
+          <div className="text-xs opacity-70">اگر خالی است: از Tray → Settings کلید x-api-key را ذخیره کنید و Test fetch را بزنید.</div>
+        </section>
+      )}
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-medium">تست اتصال Clerk → Supabase</h2>
+        <div className="rounded border border-gray-200 dark:border-zinc-800 p-3 text-sm space-y-2">
+          <ol className="list-decimal pr-4 space-y-1">
+            <li>اگر در دسکتاپ هستید، ابتدا از Settings → Test fetch مطمئن شوید env بارگذاری شده است.</li>
+            <li>از دکمه «باز کردن ورود (PKCE)» بالای صفحه برای ورود استفاده کنید.</li>
+            <li>پس از بازگشت، روی دکمه «اجرای تست Clerk → Supabase» کلیک کنید.</li>
+          </ol>
+          <div className="flex items-center gap-2">
+            <button className="px-3 py-2 rounded bg-indigo-600 text-white" onClick={testClerkToSupabase}>اجرای تست Clerk → Supabase</button>
+            <button className="px-3 py-2 rounded bg-gray-700 text-white" onClick={runSessionCheck}>بازخوانی وضعیت سشن</button>
+          </div>
+          <div className="text-xs opacity-80">
+            اگر «No Supabase session» دیدید:
+            <ul className="list-disc pr-5 mt-1 space-y-1">
+              <li>ورود را کامل کنید تا OIDC id_token دریافت شود. در دسکتاپ این کار از مسیر deep link انجام می‌شود و در <code>providers.tsx</code> به <code>supabase.auth.signInWithIdToken</code> می‌رسد.</li>
+              <li>در Edge Function مقدارهای <code>NEXT_PUBLIC_SUPABASE_URL</code> و <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> حتماً برگردند.</li>
+              <li>در دسکتاپ، ماژول <code>supabase.ts</code> باید با <code>configureSupabaseForDesktop()</code> مقداردهی شده باشد (در <code>app/providers.tsx</code> انجام شد).</li>
+            </ul>
           </div>
         </div>
       </section>

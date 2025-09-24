@@ -14,7 +14,7 @@ import { openHostedSignIn } from "@/lib/auth/deepLink";
 import { useRouter } from "next/navigation";
 import { add as diagLog } from "@/lib/diagnostics/logger";
 // Read env directly for flags/Clerk (no runtime config)
-import { configureSupabaseFromRuntime } from "@/lib/supabase";
+import { configureSupabaseFromRuntime, configureSupabaseForDesktop } from "@/lib/supabase";
 import { getPkce, clearPkce } from "@/lib/auth/pkceStore";
 import { ClerkProvider } from "@clerk/nextjs";
 
@@ -28,11 +28,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return v === "1" || v === "true" || v === "yes";
   })();
   const router = useRouter();
-  // Bootstrap: read config from env and initialize Supabase client (no runtime/API fetch)
+  // Bootstrap: initialize Supabase client
   React.useEffect(() => {
     (async () => {
       try {
-        configureSupabaseFromRuntime();
+        const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__);
+        if (isTauri) {
+          await configureSupabaseForDesktop();
+        } else {
+          configureSupabaseFromRuntime();
+        }
         // Derive Clerk publishable key only in web mode; show helpful error if missing
         try {
           if (!desktopMode) {

@@ -1,13 +1,34 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { add as diagLog } from "@/lib/diagnostics/logger";
+import { loadDesktopEnv, readDesktopEnv } from "@/lib/desktopEnv";
 
 let internalClient: SupabaseClient | null = null;
 export let isSupabaseConfigured = false;
 
+function isTauriRuntime(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as any;
+  return Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
+}
+
 function ensureClient(): SupabaseClient {
   if (internalClient) return internalClient;
-  // Read Supabase credentials directly from environment variables (no runtime/API fetch).
-  // For client-side bundles, Next.js will inline NEXT_PUBLIC_* values.
+  // In Tauri desktop, prefer cached runtime env injected via get_public_envs
+  if (isTauriRuntime()) {
+    const envs = readDesktopEnv();
+    const url = (envs.NEXT_PUBLIC_SUPABASE_URL || "").toString();
+    const anon = (envs.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").toString();
+    if (url && anon) {
+      internalClient = createClient(url, anon, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+      });
+      isSupabaseConfigured = true;
+      try { diagLog("success", "[Supabase] Client initialized from Tauri env", { url: maskUrl(url) }); } catch {}
+      return internalClient;
+    }
+    throw new Error("Supabase env not loaded in desktop. Call configureSupabaseForDesktop() early at app startup.");
+  }
+  // Web fallback: read from build-time env
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").toString();
   const anon = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "").toString();
   if (!url) {
@@ -42,5 +63,12 @@ export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
 
 // Optional explicit initializer for places like app startup
 export function configureSupabaseFromRuntime(): SupabaseClient {
+  return ensureClient();
+}
+
+// Desktop bootstrap: load envs from Tauri and create client
+export async function configureSupabaseForDesktop(): Promise<SupabaseClient> {
+  if (internalClient) return internalClient;
+  await loadDesktopEnv();
   return ensureClient();
 }
