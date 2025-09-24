@@ -128,8 +128,19 @@ export async function openOAuthUrl(url: string) {
       try { diagLog("success", "[Auth] Opened via Tauri Shell API"); } catch {}
       return;
     } catch (e) {
-      console.warn("[DeepLink] Tauri Shell open failed", e);
-      try { diagLog("error", "[Auth] Tauri Shell open failed", { error: String((e as any)?.message || e) }); } catch {}
+      console.warn("[DeepLink] Tauri Shell open failed, trying invoke open_external_url", e);
+      try { diagLog("warn", "[Auth] Tauri Shell open failed; trying open_external_url", { error: String((e as any)?.message || e) }); } catch {}
+      try {
+        const core: any = await import("@tauri-apps/api/core");
+        if (typeof core?.invoke === "function") {
+          await core.invoke("open_external_url", { url });
+          try { diagLog("success", "[Auth] Opened via open_external_url command"); } catch {}
+          return;
+        }
+      } catch (e2) {
+        console.error("[DeepLink] invoke open_external_url failed", e2);
+        try { diagLog("error", "[Auth] invoke open_external_url failed", { error: String((e2 as any)?.message || e2) }); } catch {}
+      }
       try { await navigator.clipboard.writeText(url); } catch {}
       console.error("[DeepLink] Copied URL to clipboard as fallback:", url);
       return;
