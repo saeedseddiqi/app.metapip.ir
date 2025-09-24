@@ -6,12 +6,24 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SignedIn, SignedOut, SignIn, useAuth } from "@clerk/nextjs";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useClerkSupabaseSession } from "@/lib/auth/useClerkSupabaseSession";
-import { invoke } from "@tauri-apps/api/core";
-import { openHostedSignIn } from "@/lib/auth/deepLink";
+import { openHostedSignIn, openOAuthUrl } from "@/lib/auth/deepLink";
 import { subscribe as diagSubscribe, getAll as diagGetAll, clear as diagClear, DiagLog } from "@/lib/diagnostics/logger";
 import Link from "next/link";
 
 const Dashboard = dynamic(() => import("@/components/Dashboard").then(m => m.Dashboard), { ssr: false });
+
+async function tauriInvoke<T = any>(cmd: string, args?: any): Promise<T> {
+  const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
+  if (!isTauri) throw new Error("Not running in Tauri environment");
+  try {
+    const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+    const core = await rtImport("@tauri-apps/api/core").catch(() => null as any);
+    if (core && typeof core.invoke === "function") return core.invoke(cmd, args);
+  } catch {}
+  const fallback = (window as any).__TAURI__?.core?.invoke;
+  if (typeof fallback === "function") return fallback(cmd, args);
+  throw new Error("Tauri invoke is not available");
+}
 
 function b64urlDecode(s: string): string {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -72,7 +84,7 @@ export default function DashboardPage() {
       let token: string | null = null;
       if (desktopMode) {
         try {
-          const tok = await invoke<string>("load_secure_token", { accountId: null } as any);
+          const tok = await tauriInvoke<string>("load_secure_token", { accountId: null } as any);
           token = tok && typeof tok === "string" && !tok.startsWith("ERR:") ? tok : null;
         } catch {}
       } else {
@@ -156,14 +168,9 @@ export default function DashboardPage() {
     try {
       const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
       if (!isTauri) throw new Error("Not running in Tauri environment");
-      const shell: any = await import("@tauri-apps/api/shell").catch(() => null as any);
-      const openFn = shell?.open as ((u: string) => Promise<void>) | undefined;
-      if (typeof openFn === "function") {
-        await openFn(testUrl);
-        log("↗️ Opened test deep link via Tauri Shell API");
-        return;
-      }
-      throw new Error("Tauri Shell API not available");
+      await openOAuthUrl(testUrl);
+      log("↗️ Opened test deep link via Shell/Invoke");
+      return;
     } catch (e: any) {
       log(`⚠️ opener failed (${e?.message || String(e)}); trying window.open`);
       try {

@@ -123,28 +123,33 @@ export async function openOAuthUrl(url: string) {
   const isTauri = typeof window !== "undefined" && (Boolean((window as any).__TAURI__) || Boolean((window as any).__TAURI_INTERNALS__));
   if (isTauri) {
     try {
-      const { open } = await import("@tauri-apps/api/shell");
-      await open(url);
+      const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+      const shell = await rtImport("@tauri-apps/api/shell").catch(() => null as any);
+      if (shell && typeof shell.open === "function") {
+        await shell.open(url);
+        try { diagLog("success", "[Auth] Opened via Tauri Shell API"); } catch {}
+        return;
+      }
       try { diagLog("success", "[Auth] Opened via Tauri Shell API"); } catch {}
-      return;
     } catch (e) {
       console.warn("[DeepLink] Tauri Shell open failed, trying invoke open_external_url", e);
       try { diagLog("warn", "[Auth] Tauri Shell open failed; trying open_external_url", { error: String((e as any)?.message || e) }); } catch {}
-      try {
-        const core: any = await import("@tauri-apps/api/core");
-        if (typeof core?.invoke === "function") {
-          await core.invoke("open_external_url", { url });
-          try { diagLog("success", "[Auth] Opened via open_external_url command"); } catch {}
-          return;
-        }
-      } catch (e2) {
-        console.error("[DeepLink] invoke open_external_url failed", e2);
-        try { diagLog("error", "[Auth] invoke open_external_url failed", { error: String((e2 as any)?.message || e2) }); } catch {}
-      }
-      try { await navigator.clipboard.writeText(url); } catch {}
-      console.error("[DeepLink] Copied URL to clipboard as fallback:", url);
-      return;
     }
+    try {
+      const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+      const core = await rtImport("@tauri-apps/api/core").catch(() => null as any);
+      if (core && typeof core.invoke === "function") {
+        await core.invoke("open_external_url", { url });
+        try { diagLog("success", "[Auth] Opened via open_external_url command"); } catch {}
+        return;
+      }
+    } catch (e2) {
+      console.error("[DeepLink] invoke open_external_url failed", e2);
+      try { diagLog("error", "[Auth] invoke open_external_url failed", { error: String((e2 as any)?.message || e2) }); } catch {}
+    }
+    try { await navigator.clipboard.writeText(url); } catch {}
+    console.error("[DeepLink] Copied URL to clipboard as fallback:", url);
+    return;
   }
   // Fallback for non-Tauri environments (standard web browsers)
   try {
