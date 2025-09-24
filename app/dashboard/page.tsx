@@ -9,6 +9,7 @@ import { useClerkSupabaseSession } from "@/lib/auth/useClerkSupabaseSession";
 import { invoke } from "@tauri-apps/api/core";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
 import { subscribe as diagSubscribe, getAll as diagGetAll, clear as diagClear, DiagLog } from "@/lib/diagnostics/logger";
+import Link from "next/link";
 
 const Dashboard = dynamic(() => import("@/components/Dashboard").then(m => m.Dashboard), { ssr: false });
 
@@ -266,7 +267,7 @@ export default function DashboardPage() {
         <div className="mb-3 flex items-center gap-2">
           <button onClick={onLogin} className="px-3 py-2 rounded bg-emerald-600 text-white">ورود</button>
           <button onClick={runChecklist} className="px-3 py-2 rounded bg-indigo-600 text-white disabled:opacity-50">اجرای چک‌لیست</button>
-          <a href="/diagnostics" className="px-3 py-2 rounded bg-gray-700 text-white">عیب‌یابی پیشرفته</a>
+          <Link href="/diagnostics" className="px-3 py-2 rounded bg-gray-700 text-white">عیب‌یابی پیشرفته</Link>
         </div>
         <div className="mb-6 p-4 rounded-lg border bg-white dark:bg-zinc-900" dir="rtl">
           <div className="font-semibold mb-2">تست اتصال (بدون ClerkProvider)</div>
@@ -298,7 +299,7 @@ export default function DashboardPage() {
             <div className="font-semibold">لاگ‌های حیاتی احراز هویت</div>
             <div className="flex items-center gap-2">
               <button onClick={() => { try { diagClear(); } catch {} }} className="px-2 py-1 rounded border border-gray-300 dark:border-zinc-700 text-xs">پاک کردن</button>
-              <a href="/diagnostics" className="px-2 py-1 rounded bg-gray-200 dark:bg-zinc-700 text-xs">جزئیات بیشتر</a>
+              <Link href="/diagnostics" className="px-2 py-1 rounded bg-gray-200 dark:bg-zinc-700 text-xs">جزئیات بیشتر</Link>
             </div>
           </div>
           <div className="max-h-64 overflow-auto text-xs space-y-1">
