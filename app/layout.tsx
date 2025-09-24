@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import HeaderShell from "./HeaderShell";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Providers } from "./providers";
 import "./globals.css";
 // ClerkProvider is now provided inside Providers (client) after runtime config loads
@@ -22,8 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           rel="stylesheet"
         />
       </head>
-            <body className="bg-gray-50 text-gray-900 dark:bg-zinc-900 dark:text-zinc-100">
-        <SpeedInsights />
+      <body className="bg-gray-50 text-gray-900 dark:bg-zinc-900 dark:text-zinc-100">
         <Providers>
           <main className="p-6 max-w-5xl mx-auto space-y-6">
             {/* Header visibility is controlled inside HeaderShell (client) */}
