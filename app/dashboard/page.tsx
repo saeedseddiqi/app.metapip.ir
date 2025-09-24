@@ -156,14 +156,14 @@ export default function DashboardPage() {
     try {
       const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
       if (!isTauri) throw new Error("Not running in Tauri environment");
-      const mod = await import("@tauri-apps/plugin-opener");
-      const openFn = (mod as any).open as ((u: string) => Promise<void>) | undefined;
+      const shell: any = await import("@tauri-apps/api/shell").catch(() => null as any);
+      const openFn = shell?.open as ((u: string) => Promise<void>) | undefined;
       if (typeof openFn === "function") {
         await openFn(testUrl);
-        log("↗️ Trying to open test deep link via opener plugin");
+        log("↗️ Opened test deep link via Tauri Shell API");
         return;
       }
-      throw new Error("opener plugin missing");
+      throw new Error("Tauri Shell API not available");
     } catch (e: any) {
       log(`⚠️ opener failed (${e?.message || String(e)}); trying window.open`);
       try {

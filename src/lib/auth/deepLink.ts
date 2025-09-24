@@ -43,57 +43,11 @@ export async function openHostedSignIn(redirectUrl = "metapip://auth/callback") 
   auth.searchParams.set("state", state);
   const url = auth;
   try { diagLog("info", "[Auth] Built OAuth authorize URL", { base: oauthBase, scope, hasClientId: true }); } catch {}
-  // Prefer Tauri opener when available; otherwise fallback to window.open
+  // Prefer Tauri Shell API when available; otherwise fallback to window.open
   const isTauri = typeof window !== "undefined" && (Boolean((window as any).__TAURI__) || Boolean((window as any).__TAURI_INTERNALS__));
   try { console.log("[DeepLink] openHostedSignIn ->", url.toString(), "isTauri=", isTauri); } catch {}
   try { diagLog("info", "[Auth] Opening sign-in URL", { isTauri }); } catch {}
-  if (isTauri) {
-    // Use plugin-opener only; do not use window.open in Tauri WebView
-    try {
-      const mod: any = await import("@tauri-apps/plugin-opener");
-      const cand = (mod && (mod.open || mod.default || mod?.default?.open)) as any;
-      if (typeof cand === "function") {
-        await cand(url.toString());
-        console.log("[DeepLink] Opened via @tauri-apps/plugin-opener");
-        try { diagLog("success", "[Auth] Opened via plugin-opener"); } catch {}
-        return;
-      }
-      throw new Error("plugin-opener: no callable export found (open/default)");
-    } catch (e) {
-      console.warn("[DeepLink] plugin-opener JS wrapper failed, trying core.invoke", e);
-      try { diagLog("warn", "[Auth] plugin-opener wrapper failed, trying core.invoke", { error: String((e as any)?.message || e) }); } catch {}
-      try {
-        const core: any = await import("@tauri-apps/api/core");
-        if (typeof core?.invoke === "function") {
-          await core.invoke("plugin:opener|open_url", { url: url.toString() });
-          console.log("[DeepLink] Opened via core.invoke('plugin:opener|open_url')");
-          try { diagLog("success", "[Auth] Opened via core.invoke opener"); } catch {}
-          return;
-        }
-      } catch (e2) {
-        console.error("[DeepLink] core.invoke fallback failed", e2);
-        try { diagLog("error", "[Auth] core.invoke opener failed", { error: String((e2 as any)?.message || e2) }); } catch {}
-      }
-    }
-    // Last resort: copy to clipboard (no window.open in Tauri)
-    try { await navigator.clipboard.writeText(url.toString()); } catch {}
-    console.error("[DeepLink] Could not open URL automatically. Link copied to clipboard:", url.toString());
-    try { diagLog("error", "[Auth] Could not open URL automatically; copied to clipboard"); } catch {}
-    return;
-  }
-
-  // Fallback for non-Tauri environments (standard web browsers)
-  try {
-    const w = window.open(url.toString(), "_blank", "noopener,noreferrer");
-    if (!w) {
-      // Popup blocked or not supported.
-      console.warn("[DeepLink] Popup was blocked. Please enable popups for this site.");
-      try { diagLog("warn", "[Auth] Popup was blocked in web browser"); } catch {}
-    }
-  } catch (e) {
-    console.error("[DeepLink] window.open failed:", e);
-    try { diagLog("error", "[Auth] window.open failed", { error: String((e as any)?.message || e) }); } catch {}
-  }
+  await openOAuthUrl(url.toString());
 }
 
 export function useDeepLinkListener(onUrl: DeepLinkHandler) {
@@ -162,4 +116,34 @@ function getClerkClientIdFromEnv(): string {
     || (process.env.NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID as string | undefined);
   if (!id) throw new Error("CLERK_CLIENT_ID missing. Set NEXT_PUBLIC_CLERK_CLIENT_ID (or NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID) in env.");
   return id;
+}
+
+// Open a URL for OAuth/OIDC in the system browser using Tauri Shell API when available.
+export async function openOAuthUrl(url: string) {
+  const isTauri = typeof window !== "undefined" && (Boolean((window as any).__TAURI__) || Boolean((window as any).__TAURI_INTERNALS__));
+  if (isTauri) {
+    try {
+      const { open } = await import("@tauri-apps/api/shell");
+      await open(url);
+      try { diagLog("success", "[Auth] Opened via Tauri Shell API"); } catch {}
+      return;
+    } catch (e) {
+      console.warn("[DeepLink] Tauri Shell open failed", e);
+      try { diagLog("error", "[Auth] Tauri Shell open failed", { error: String((e as any)?.message || e) }); } catch {}
+      try { await navigator.clipboard.writeText(url); } catch {}
+      console.error("[DeepLink] Copied URL to clipboard as fallback:", url);
+      return;
+    }
+  }
+  // Fallback for non-Tauri environments (standard web browsers)
+  try {
+    const w = window.open(url, "_blank", "noopener,noreferrer");
+    if (!w) {
+      console.warn("[DeepLink] Popup was blocked. Please enable popups for this site.");
+      try { diagLog("warn", "[Auth] Popup was blocked in web browser"); } catch {}
+    }
+  } catch (e) {
+    console.error("[DeepLink] window.open failed:", e);
+    try { diagLog("error", "[Auth] window.open failed", { error: String((e as any)?.message || e) }); } catch {}
+  }
 }
