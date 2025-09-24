@@ -1,5 +1,5 @@
 import React from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { add as diagLog } from "@/lib/diagnostics/logger";
 
 export const ChartLauncher: React.FC = () => {
   const [symbol, setSymbol] = React.useState("");
@@ -14,7 +14,20 @@ export const ChartLauncher: React.FC = () => {
     try {
       // Basic TradingView URL pattern
       const url = `https://metacenter.vercel.app/chart/?symbol=${encodeURIComponent(symbol.trim())}`;
-      await openUrl(url);
+      const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
+      if (isTauri) {
+        try {
+          const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+          const core = await rtImport("@tauri-apps/api/core").catch(() => null as any);
+          if (core && typeof core.invoke === "function") {
+            await core.invoke("open_external_url", { url });
+            try { diagLog("success", "[ChartLauncher] Opened via open_external_url", { url }); } catch {}
+            return;
+          }
+        } catch {}
+      }
+      const w = window.open(url, "_blank", "noopener,noreferrer");
+      if (!w) window.location.href = url;
     } catch (e: any) {
       setError(e?.message ?? "باز کردن چارت ناموفق بود");
     } finally {

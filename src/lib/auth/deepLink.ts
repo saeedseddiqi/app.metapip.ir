@@ -124,19 +124,6 @@ export async function openOAuthUrl(url: string) {
   if (isTauri) {
     try {
       const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
-      const shell = await rtImport("@tauri-apps/api/shell").catch(() => null as any);
-      if (shell && typeof shell.open === "function") {
-        await shell.open(url);
-        try { diagLog("success", "[Auth] Opened via Tauri Shell API"); } catch {}
-        return;
-      }
-      try { diagLog("success", "[Auth] Opened via Tauri Shell API"); } catch {}
-    } catch (e) {
-      console.warn("[DeepLink] Tauri Shell open failed, trying invoke open_external_url", e);
-      try { diagLog("warn", "[Auth] Tauri Shell open failed; trying open_external_url", { error: String((e as any)?.message || e) }); } catch {}
-    }
-    try {
-      const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
       const core = await rtImport("@tauri-apps/api/core").catch(() => null as any);
       if (core && typeof core.invoke === "function") {
         await core.invoke("open_external_url", { url });

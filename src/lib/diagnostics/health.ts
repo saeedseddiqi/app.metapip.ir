@@ -65,14 +65,8 @@ export async function runHealthChecks(): Promise<HealthReport> {
   const isTauri = typeof window !== "undefined" && (Boolean((window as any).__TAURI__) || Boolean((window as any).__TAURI_INTERNALS__));
   items.push({ id: "isTauri", ok: isTauri });
 
-  // opener plugin importable?
-  try {
-    const mod: any = isTauri ? await import("@tauri-apps/plugin-opener") : null;
-    const hasFn = !!(mod && (mod.open || mod.default || mod?.default?.open));
-    items.push({ id: "openerPluginAvailable", ok: !isTauri || hasFn, details: hasFn });
-  } catch (e: any) {
-    items.push({ id: "openerPluginAvailable", ok: false, error: String(e?.message || e) });
-  }
+  // opener plugin no longer used
+  items.push({ id: "openerPluginAvailable", ok: true, details: "not required" });
 
   // deep-link plugin importable?
   try {

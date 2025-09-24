@@ -9,7 +9,6 @@ import { useClerk } from "@clerk/nextjs";
 import { useEffect } from "react";
 import { useDeepLinkListener, parseClerkToken, exchangeClerkOAuthCode } from "@/lib/auth/deepLink";
 import { supabase } from "@/lib/supabase";
-import { invoke } from "@tauri-apps/api/core";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
 import { useRouter } from "next/navigation";
 import { add as diagLog } from "@/lib/diagnostics/logger";
@@ -114,6 +113,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // if we already have a secure token, skip
         let hasSecure = false;
         try {
+          const { invoke } = await import("@tauri-apps/api/core");
           const tok = await invoke<string>("load_secure_token", { accountId: null } as any);
           hasSecure = Boolean(tok && typeof tok === "string" && !tok.startsWith("ERR:") && tok.trim().length > 0);
         } catch {}
@@ -239,6 +239,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             const { data: sessionRes } = await supabase.auth.getSession();
             const access = sessionRes?.session?.access_token;
             if (access) {
+              const { invoke } = await import("@tauri-apps/api/core");
               await invoke("save_secure_token", { accountId: null, token: access });
               try { diagLog("success", "[Auth] Secure token persisted in keyring"); } catch {}
             }

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+// Tauri core imported at runtime only
 
 // Minimal event bus for link notifications
 export type LinkEvent = { kind: "success" | "error"; message: string };
@@ -63,7 +63,11 @@ export async function handleLinkUrl(url: string) {
     return { ok: false, message: "توکن موجود نیست" };
   }
   try {
-    const res = await invoke<string>("link_account", { token, account_id: accountId });
+    const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
+    if (!isTauri) throw new Error("Not running in Tauri environment");
+    const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+    const core = await rtImport("@tauri-apps/api/core").catch(() => null as any);
+    const res = core && typeof core.invoke === "function" ? (await core.invoke("link_account", { token, account_id: accountId })) as string : "ERR: invoke unavailable";
     const isError = res.trim().startsWith("ERR:");
     if (!isError) setAccountLinked(true);
     emit({ kind: isError ? "error" : "success", message: res });

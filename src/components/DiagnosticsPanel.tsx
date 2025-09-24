@@ -5,7 +5,6 @@ import { supabase, isSupabaseConfigured, configureSupabaseFromRuntime, configure
 import { add as diagLog, subscribe as diagSubscribe, getAll as diagGetAll, clear as diagClear, DiagLog } from "@/lib/diagnostics/logger";
 import { openHostedSignIn } from "@/lib/auth/deepLink";
 import { loadDesktopEnv, readDesktopEnv } from "@/lib/desktopEnv";
-import { invoke } from "@tauri-apps/api/core";
 
 export type RemoteEnvItem = { key: string; value: string; is_secret?: boolean | null };
 
@@ -162,7 +161,9 @@ export function DiagnosticsPanel() {
       // تست توکن سمت Tauri (JWT persisted)
       if (isTauri) {
         try {
-          const tok = await invoke<string>("load_secure_token", { accountId: null } as any);
+          const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+          const core = await rtImport("@tauri-apps/api/core").catch(() => null as any);
+          const tok = core && typeof core.invoke === "function" ? (await core.invoke("load_secure_token", { accountId: null } as any) as string) : null;
           const ok = tok && typeof tok === "string" && !tok.startsWith("ERR:") && tok.trim().length > 0;
           setTauriToken(ok ? tok : null);
           try { diagLog(ok ? "success" : "warn", ok ? "[Test] Secure token found in keyring" : "[Test] Secure token missing in keyring"); } catch {}

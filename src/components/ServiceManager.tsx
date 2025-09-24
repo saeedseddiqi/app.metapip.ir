@@ -1,5 +1,4 @@
 import React from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { CheckCircleIcon, ExclamationTriangleIcon, InformationCircleIcon, PlayIcon, StopIcon } from "@heroicons/react/24/outline";
 
 export const ServiceManager: React.FC = () => {
@@ -10,7 +9,11 @@ export const ServiceManager: React.FC = () => {
 
   async function fetchStatus() {
     try {
-      const s = await invoke<string>("python_dev_status");
+      const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
+      if (!isTauri) throw new Error("Not running in Tauri environment");
+      const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+      const core = await rtImport("@tauri-apps/api/core").catch(() => null as any);
+      const s = core && typeof core.invoke === "function" ? (await core.invoke("python_dev_status")) as string : "";
       setStatusText(s || "");
       const isRun = /^running$/i.test(s.trim());
       setRunning(isRun);
@@ -32,7 +35,11 @@ export const ServiceManager: React.FC = () => {
     try {
       setBusy(cmd);
       setResult(null);
-      const text = (await invoke<string>(cmd)) || "";
+      const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
+      if (!isTauri) throw new Error("Not running in Tauri environment");
+      const rtImport = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+      const core = await rtImport("@tauri-apps/api/core").catch(() => null as any);
+      const text = core && typeof core.invoke === "function" ? (await core.invoke(cmd)) as string : "";
       const isError = text.trim().startsWith("ERR:");
       setResult({ kind: isError ? "error" : "success", text });
     } catch (e: any) {
