@@ -13,6 +13,7 @@ import { add as diagLog } from "@/lib/diagnostics/logger";
 import { getPkce, clearPkce } from "@/lib/auth/pkceStore";
 import { ClerkProvider } from "@clerk/nextjs";
 import { useRouter } from "next/router";
+import SpaUrlMask from "@/pages-compat/SpaUrlMask";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = React.useState(false);
@@ -230,6 +231,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <HeroUIProvider>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="theme" disableTransitionOnChange>
+        {/* Keep the address bar at '/' to provide a single-URL SPA experience */}
+        <SpaUrlMask />
         {!ready ? (
           <div className="min-h-[40vh] flex items-center justify-center" dir="rtl">
             {bootError ? (

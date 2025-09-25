@@ -4,7 +4,7 @@ import React from 'react';
 import '@/styles/globals.css';
 import HeaderShell from '@/pages-compat/HeaderShell';
 import { Providers } from '@/pages-compat/Providers';
-import { Analytics } from '@vercel/analytics/react';
+import { Analytics } from '@vercel/analytics/next';
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   return (
