@@ -1,10 +1,10 @@
 "use client";
-import DiagnosticsPanel from "@/components/DiagnosticsPanel";
+import DiagnosticsChecklist from "@/components/DiagnosticsChecklist";
 
 export default function DiagnosticsPage() {
   return (
     <main className="p-4" dir="rtl">
-      <DiagnosticsPanel />
+      <DiagnosticsChecklist />
     </main>
   );
 }
