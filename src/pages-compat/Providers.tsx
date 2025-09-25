@@ -71,8 +71,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   // Optional: updater check in desktop
   React.useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
+    (async () => {
       try {
         if (typeof window === "undefined") return;
         const isTauri = Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
@@ -80,9 +79,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         const { check } = await import("@tauri-apps/plugin-updater");
         await check();
       } catch {}
-    };
-    run();
-    return () => { cancelled = true; };
+    })();
   }, []);
 
   // Auto open hosted sign-in in Tauri desktop if necessary
