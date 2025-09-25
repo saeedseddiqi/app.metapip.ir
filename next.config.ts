@@ -4,7 +4,6 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  output: 'export',
   // Disable Image Optimization for static export
   images: { unoptimized: true },
 };
