@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* Base styles migrated from src/index.css */
+:root { color-scheme: light dark; }
+html, body { height: 100%; }
+body { font-family: "Vazirmatn", Inter, Avenir, Helvetica, Arial, sans-serif; }
+body { @apply bg-gray-50 text-gray-900 dark:bg-zinc-900 dark:text-zinc-100; }
+
+/* Ensure light/dark always reflects current theme */
+:root {
+  --bg: #f8fafc; /* body background */
+  --fg: #111827; /* body text */
+  --surface: #ffffff; /* cards, inputs, dialogs */
+  --border: #e5e7eb; /* borders */
+  --muted: #6b7280; /* secondary text */
+}
+html[data-theme="dark"], html.dark {
+  --bg: #0b0f14;
+  --fg: #e5e7eb;
+  --surface: #0f141c;
+  --border: #3f3f46;
+  --muted: #9ca3af;
+}
+body { background-color: var(--bg); color: var(--fg); }
+
+/* Form controls */
+input, select, textarea {
+  background-color: var(--surface) !important;
+  color: var(--fg) !important;
+  border-color: var(--border) !important;
+}
+input::placeholder, textarea::placeholder { color: var(--muted); }
+
+/* Dialogs and cards */
+[role="dialog"], .card-surface {
+  background-color: var(--surface) !important;
+  color: var(--fg) !important;
+  border-color: var(--border) !important;
+}
+
+/* High-contrast select for both themes */
+.select-base {
+  @apply w-full px-3 py-2 rounded border bg-white text-zinc-900 border-gray-300;
+  @apply dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-700;
+  @apply focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500;
+}
+
+/* Improve readability of dropdown list items (supported in modern browsers) */
+.select-base option {
+  @apply bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100;
+}
+
+/* Optional: hide default arrow on some browsers when we later need custom arrows */
+/* .select-base::-ms-expand { display: none; } */
