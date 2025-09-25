@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev -p 1421",
-    "build": "next build && next export -o .out",
+    "build": "next build && next export --outdir .out",
     "preview": "serve -s .out -l 1421",
     "start": "serve .out",
     "tauri": "tauri",
