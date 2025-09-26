@@ -9,8 +9,8 @@ import { Analytics } from '@vercel/analytics/next';
 export default function MyApp({ Component, pageProps }: AppProps) {
   return (
     <Providers>
-      <HeaderShell />
       <main className="p-6 max-w-5xl mx-auto space-y-6">
+        <HeaderShell />
         <Component {...pageProps} />
       </main>
       <Analytics />
