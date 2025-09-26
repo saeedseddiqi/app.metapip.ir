@@ -72,7 +72,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const autoRanRef = React.useRef(false);
 
-  const { getToken } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
 
   const log = React.useCallback((m: string) => setLogs((x) => [m, ...x].slice(0, 200)), []);
 
@@ -127,16 +127,35 @@ export default function DashboardPage() {
         throw new Error('Supabase is not properly configured');
       }
 
-      // 2. بررسی وجود توکن کلرک
-      const token = await getToken?.({ template: 'supabase' });
-      if (!token) {
-        throw new Error('No Clerk token available');
+      // 2. بررسی وضعیت احراز هویت کلرک
+      if (!isSignedIn) {
+        throw new Error('User is not signed in to Clerk');
       }
 
-      // 3. تنظیم نشست سوپابیس با توکن کلرک
-      // استفاده از 'custom' برای provider یا مستقیم استفاده از setSession
+      // 3. انتظار برای آماده شدن توکن (تا ۵ ثانیه)
+      let token = null;
+      let attempts = 0;
+      while (!token && attempts < 10) { // حداکثر ۱۰ تلاش (۵ ثانیه)
+        try {
+          token = await getToken?.({ template: 'supabase' });
+          if (!token) {
+            await new Promise(resolve => setTimeout(resolve, 500)); // انتظار ۵۰۰ میلی‌ثانیه
+            attempts++;
+          }
+        } catch (e) {
+          console.warn('Token retrieval attempt failed:', e);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
+        }
+      }
+
+      if (!token) {
+        throw new Error('Failed to retrieve Clerk token after multiple attempts');
+      }
+
+      // 4. تنظیم نشست سوپابیس با توکن کلرک
       const { error: signInError } = await supabase.auth.signInWithIdToken({
-        provider: 'clerk',  // تغییر از 'oidc' به 'clerk'
+        provider: 'clerk',
         token: token
       });
 
@@ -153,7 +172,7 @@ export default function DashboardPage() {
         }
       }
 
-      // 4. بررسی نهایی نشست
+      // 5. بررسی نهایی نشست
       const { data: sessionRes, error: sessionErr } = await supabase.auth.getSession();
       if (sessionErr || !sessionRes.session) {
         throw sessionErr || new Error('Failed to establish Supabase session');
@@ -165,7 +184,7 @@ export default function DashboardPage() {
     } finally {
       setTesting(false);
     }
-  }, [desktopMode, log, getToken]);
+  }, [desktopMode, log, getToken, isSignedIn]);
 
   // Utilities for deep-link debugging (desktop mode)
   const buildHostedUrl = React.useCallback(() => {
@@ -402,7 +421,7 @@ export default function DashboardPage() {
         <div className="flex flex-col items-center gap-4 py-10">
           <h2 className="text-xl font-semibold">برای مشاهده داشبورد وارد شوید</h2>
           <div className="max-w-md w-full">
-            <SignIn routing="hash" signUpUrl="/sign-up" afterSignInUrl="/dashboard" />
+            <SignIn routing="hash" signUpUrl="/sign-up" fallbackRedirectUrl="/dashboard" />
           </div>
         </div>
       </SignedOut>
