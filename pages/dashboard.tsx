@@ -153,32 +153,20 @@ export default function DashboardPage() {
         throw new Error('Failed to retrieve Clerk token after multiple attempts');
       }
 
-      // 4. تنظیم نشست سوپابیس با توکن کلرک
-      const { error: signInError } = await supabase.auth.signInWithIdToken({
-        provider: 'clerk',
-        token: token
-      });
+      // 4. بررسی JWT در Tauri backend بجای Supabase
+      const verifyResult = await tauriInvoke<string>('check_session', { jwt: token });
 
-      if (signInError) {
-        // اگر clerk هم کار نکرد، از setSession استفاده کنیم
-        console.log('Trying setSession approach...');
-        const { error: setSessionError } = await supabase.auth.setSession({
-          access_token: token,
-          refresh_token: token
-        } as any);
-
-        if (setSessionError) {
-          throw setSessionError;
-        }
+      if (verifyResult.startsWith('ERR:')) {
+        throw new Error(verifyResult);
       }
 
-      // 5. بررسی نهایی نشست
-      const { data: sessionRes, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr || !sessionRes.session) {
-        throw sessionErr || new Error('Failed to establish Supabase session');
+      const verifyData = JSON.parse(verifyResult);
+      if (!verifyData.valid) {
+        throw new Error('Session check failed');
       }
 
-      log('✅ Supabase session established successfully in Tauri');
+      log('✅ Session verified successfully in Tauri backend');
+      log(`User: ${verifyData.email || verifyData.user_id}, Role: ${verifyData.role || 'N/A'}`);
     } catch (e: any) {
       log(`❌ Tauri session check failed: ${e?.message || String(e)}`);
     } finally {
@@ -335,7 +323,7 @@ export default function DashboardPage() {
               {testing ? 'در حال تست…' : 'اجرای تست JWT → Supabase'}
             </button>
             <button disabled={testing} onClick={runTauriVerify} className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50">
-              {testing ? 'در حال تست…' : 'تست تأیید JWT در Tauri'}
+              {testing ? 'در حال تست…' : 'تست تأیید Session در Tauri'}
             </button>
           </div>
           <div className="mt-3 p-3 rounded bg-gray-100 dark:bg-zinc-800 text-sm whitespace-pre-wrap" dir="auto">
@@ -408,7 +396,7 @@ export default function DashboardPage() {
               {testing ? 'در حال تست…' : 'اجرای تست Clerk → Supabase'}
             </button>
             <button disabled={testing} onClick={runTauriVerify} className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50">
-              {testing ? 'در حال تست…' : 'تست تأیید JWT در Tauri'}
+              {testing ? 'در حال تست…' : 'تست تأیید Session در Tauri'}
             </button>
           </div>
           <div className="mt-3 p-3 rounded bg-gray-100 dark:bg-zinc-800 text-sm whitespace-pre-wrap" dir="auto">
