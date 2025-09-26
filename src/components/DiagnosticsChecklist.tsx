@@ -22,19 +22,19 @@ function Row({ title, ok, detail, reason }: { title: string; ok: boolean; detail
 }
 
 export default function DiagnosticsChecklist() {
-  // Read required envs (build-time)
+  // Read required envs (build-time embedded)
   const env = React.useMemo(() => {
-    const get = (k: string) => (process.env as any)[k] as string | undefined;
-    const base = get("NEXT_PUBLIC_CLERK_BASE_URL") || get("NEXT_PUBLIC_CLERK_OAUTH_BASE") || get("NEXT_PUBLIC_CLERK_HOSTED_URL");
-    const clientId = get("NEXT_PUBLIC_CLERK_CLIENT_ID") || get("NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID");
+    // NEXT_PUBLIC_* vars are embedded at build time, not available via process.env at runtime
+    const base = process.env.NEXT_PUBLIC_CLERK_BASE_URL || process.env.NEXT_PUBLIC_CLERK_OAUTH_BASE || process.env.NEXT_PUBLIC_CLERK_HOSTED_URL;
+    const clientId = process.env.NEXT_PUBLIC_CLERK_CLIENT_ID || process.env.NEXT_PUBLIC_CLERK_OAUTH_CLIENT_ID;
     return {
-      SUPABASE_URL: get("NEXT_PUBLIC_SUPABASE_URL"),
-      SUPABASE_ANON_KEY: get("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
-      CLERK_PUBLISHABLE_KEY: get("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
+      SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
       CLERK_BASE_URL: base,
       CLERK_CLIENT_ID: clientId,
-      DESKTOP_DISABLE_CLERK: get("NEXT_PUBLIC_DESKTOP_DISABLE_CLERK") || "0",
-      SUPABASE_SESSION_ENABLED: get("NEXT_PUBLIC_SUPABASE_SESSION_ENABLED") || "0",
+      DESKTOP_DISABLE_CLERK: process.env.NEXT_PUBLIC_DESKTOP_DISABLE_CLERK || "0",
+      SUPABASE_SESSION_ENABLED: process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED || "0",
     };
   }, []);
 
