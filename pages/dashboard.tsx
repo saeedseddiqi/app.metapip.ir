@@ -121,16 +121,41 @@ export default function DashboardPage() {
     try {
       const isTauri = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
       if (!isTauri) throw new Error('Not running in Tauri environment');
-      // Replace legacy Tauri verify with Supabase session presence check
+
+      // 1. ابتدا مطمئن شویم سوپابیس کانفیگ شده است
+      if (!isSupabaseConfigured) {
+        throw new Error('Supabase is not properly configured');
+      }
+
+      // 2. بررسی وجود توکن کلرک
+      const token = await getToken?.({ template: 'supabase' });
+      if (!token) {
+        throw new Error('No Clerk token available');
+      }
+
+      // 3. تنظیم نشست سوپابیس با توکن کلرک
+      const { error: signInError } = await supabase.auth.signInWithIdToken({
+        provider: 'oidc',
+        token: token
+      });
+
+      if (signInError) {
+        throw signInError;
+      }
+
+      // 4. بررسی نهایی نشست
       const { data: sessionRes, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr || !sessionRes.session) throw sessionErr || new Error('No Supabase session');
-      log('✅ Supabase session present in Tauri environment');
+      if (sessionErr || !sessionRes.session) {
+        throw sessionErr || new Error('Failed to establish Supabase session');
+      }
+
+      log('✅ Supabase session established successfully in Tauri');
     } catch (e: any) {
       log(`❌ Tauri session check failed: ${e?.message || String(e)}`);
     } finally {
       setTesting(false);
     }
-  }, [desktopMode, log]);
+  }, [desktopMode, log, getToken]);
 
   // Utilities for deep-link debugging (desktop mode)
   const buildHostedUrl = React.useCallback(() => {
