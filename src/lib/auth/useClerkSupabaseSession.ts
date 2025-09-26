@@ -45,7 +45,16 @@ export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onE
         } else {
           // Default and recommended: exchange the OIDC/Clerk token for a Supabase session
           const { error } = await supabase.auth.signInWithIdToken({ provider: provider as any, token });
-          if (error) throw error;
+
+          if (error) {
+            // اگر provider کار نکرد، از setSession استفاده کنیم
+            console.log('[SupabaseSession] signInWithIdToken failed, trying setSession...');
+            const { error: setSessionError } = await supabase.auth.setSession({
+              access_token: token,
+              refresh_token: token
+            } as any);
+            if (setSessionError) throw setSessionError;
+          }
         }
         const { data: sessionRes, error: sessionErr } = await supabase.auth.getSession();
         if (sessionErr || !sessionRes.session) throw sessionErr || new Error("No Supabase session");

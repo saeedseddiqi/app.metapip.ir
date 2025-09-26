@@ -134,13 +134,23 @@ export default function DashboardPage() {
       }
 
       // 3. تنظیم نشست سوپابیس با توکن کلرک
+      // استفاده از 'custom' برای provider یا مستقیم استفاده از setSession
       const { error: signInError } = await supabase.auth.signInWithIdToken({
-        provider: 'oidc',
+        provider: 'clerk',  // تغییر از 'oidc' به 'clerk'
         token: token
       });
 
       if (signInError) {
-        throw signInError;
+        // اگر clerk هم کار نکرد، از setSession استفاده کنیم
+        console.log('Trying setSession approach...');
+        const { error: setSessionError } = await supabase.auth.setSession({
+          access_token: token,
+          refresh_token: token
+        } as any);
+
+        if (setSessionError) {
+          throw setSessionError;
+        }
       }
 
       // 4. بررسی نهایی نشست
