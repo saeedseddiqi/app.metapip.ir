@@ -10,13 +10,19 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onError?: (e: any) => void }) {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const triedRef = React.useRef(false);
-  // Choose provider based on env: default to 'clerk' (TPA), allow 'oidc' if explicitly set
+  // Choose provider based on env: default to 'oidc', allow 'clerk' if explicitly set
   const envProvider = (process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PROVIDER as string | undefined);
-  const provider = ((envProvider || "clerk").toLowerCase() === "oidc") ? "oidc" : "clerk";
+  const provider = ((envProvider || "oidc").toLowerCase() === "clerk") ? "clerk" : "oidc";
   const enabled = (() => {
     const v = String(process.env.NEXT_PUBLIC_SUPABASE_SESSION_ENABLED || "0").trim().toLowerCase();
     return v === "1" || v === "true" || v === "yes";
   })();
+
+  // Resolve Clerk template and session mode from env
+  const templateEnv = (process.env.NEXT_PUBLIC_CLERK_SUPABASE_TEMPLATE as string | undefined);
+  const template = templateEnv && templateEnv.trim().length > 0 ? templateEnv : "supabase";
+  const sessionModeEnv = (process.env.NEXT_PUBLIC_SUPABASE_SESSION_MODE as string | undefined);
+  const sessionMode = ((sessionModeEnv || "id_token").toLowerCase() === "set_session") ? "set_session" : "id_token";
 
   React.useEffect(() => {
     if (!enabled) {
@@ -28,17 +34,24 @@ export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onE
       if (triedRef.current) return; // avoid spamming sign-in attempts
       triedRef.current = true;
       try {
-        // Prefer a Clerk JWT template named 'supabase' (OIDC-friendly), fallback to session
-        let token = await getToken?.({ template: "supabase" } as any);
-        if (!token) token = await (getToken?.({ template: "session" } as any) as Promise<string | null>);
+        // Prefer a Clerk JWT template from env (default 'supabase'), fallback to 'session'
+        let token = await getToken?.({ template, /* request fresh token when possible */ skipCache: true } as any);
+        if (!token) token = await (getToken?.({ template: "session", skipCache: true } as any) as Promise<string | null>);
         if (!token) throw new Error("Clerk token not available");
-        const { error } = await supabase.auth.signInWithIdToken({ provider: provider as any, token });
-        if (error) throw error;
+        if (sessionMode === "set_session") {
+          // Use external JWT directly for Supabase requests (no refresh expected)
+          const { error } = await (supabase.auth.setSession({ access_token: token, refresh_token: token } as any) as Promise<any>);
+          if (error) throw error;
+        } else {
+          // Default and recommended: exchange the OIDC/Clerk token for a Supabase session
+          const { error } = await supabase.auth.signInWithIdToken({ provider: provider as any, token });
+          if (error) throw error;
+        }
         const { data: sessionRes, error: sessionErr } = await supabase.auth.getSession();
         if (sessionErr || !sessionRes.session) throw sessionErr || new Error("No Supabase session");
         options?.onSignedIn?.();
       } catch (e) {
-        console.error("[SupabaseSession] signInWithIdToken failed", e);
+        console.error("[SupabaseSession] activation failed", e);
         triedRef.current = false; // allow retry on next render
         options?.onError?.(e);
       }
