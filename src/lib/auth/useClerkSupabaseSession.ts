@@ -10,6 +10,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onError?: (e: any) => void }) {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const triedRef = React.useRef(false);
+  const SUPABASE_TEMPLATE = "supabase" as const;
   // Choose provider based on env: default to 'oidc', allow 'clerk' if explicitly set
   const envProvider = (process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PROVIDER as string | undefined);
   const provider = ((envProvider || "oidc").toLowerCase() === "clerk") ? "clerk" : "oidc";
@@ -18,9 +19,7 @@ export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onE
     return v === "1" || v === "true" || v === "yes";
   })();
 
-  // Resolve Clerk template and session mode from env
-  const templateEnv = (process.env.NEXT_PUBLIC_CLERK_SUPABASE_TEMPLATE as string | undefined);
-  const template = templateEnv && templateEnv.trim().length > 0 ? templateEnv : "supabase";
+  // Resolve session mode from env (template is fixed to 'supabase')
   const sessionModeEnv = (process.env.NEXT_PUBLIC_SUPABASE_SESSION_MODE as string | undefined);
   const sessionMode = ((sessionModeEnv || "id_token").toLowerCase() === "set_session") ? "set_session" : "id_token";
 
@@ -35,8 +34,7 @@ export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onE
       triedRef.current = true;
       try {
         // Prefer a Clerk JWT template from env (default 'supabase'), fallback to 'session'
-        let token = await getToken?.({ template, /* request fresh token when possible */ skipCache: true } as any);
-        if (!token) token = await (getToken?.({ template: "session", skipCache: true } as any) as Promise<string | null>);
+        const token = await getToken?.({ template: SUPABASE_TEMPLATE, /* request fresh token when possible */ skipCache: true } as any);
         if (!token) throw new Error("Clerk token not available");
         if (sessionMode === "set_session") {
           // Use external JWT directly for Supabase requests (no refresh expected)
@@ -61,9 +59,63 @@ export function useClerkSupabaseSession(options?: { onSignedIn?: () => void; onE
         options?.onSignedIn?.();
       } catch (e) {
         console.error("[SupabaseSession] activation failed", e);
+        // Attempt a one-time forced refresh of the Clerk token and retry activation
+        try {
+          const fresh = await getToken?.({ template: SUPABASE_TEMPLATE, skipCache: true } as any);
+          if (fresh) {
+            try {
+              if (sessionMode === "set_session") {
+                const { error } = await (supabase.auth.setSession({ access_token: fresh, refresh_token: fresh } as any) as Promise<any>);
+                if (error) throw error;
+              } else {
+                const { error } = await supabase.auth.signInWithIdToken({ provider: provider as any, token: fresh });
+                if (error) {
+                  console.log('[SupabaseSession] retry signInWithIdToken failed, trying setSession...');
+                  const { error: setSessionError } = await supabase.auth.setSession({ access_token: fresh, refresh_token: fresh } as any);
+                  if (setSessionError) throw setSessionError;
+                }
+              }
+              const { data: sessionRes2, error: sessionErr2 } = await supabase.auth.getSession();
+              if (sessionErr2 || !sessionRes2.session) throw sessionErr2 || new Error('No Supabase session (retry)');
+              options?.onSignedIn?.();
+              return; // success on retry
+            } catch (retryErr) {
+              console.warn('[SupabaseSession] retry activation failed', retryErr);
+            }
+          }
+        } catch (refreshErr) {
+          console.warn('[SupabaseSession] token refresh attempt failed', refreshErr);
+        }
         triedRef.current = false; // allow retry on next render
         options?.onError?.(e);
+        try {
+          // As a last resort, redirect user to sign-in page to re-establish Clerk session
+          if (typeof window !== 'undefined') {
+            setTimeout(() => { try { window.location.href = '/sign-in'; } catch {} }, 1000);
+          }
+        } catch {}
       }
     })();
   }, [enabled, isLoaded, isSignedIn, getToken, options]);
+
+  // Clear Supabase session and desktop caches when user is signed out
+  React.useEffect(() => {
+    (async () => {
+      try {
+        if (!isLoaded) return;
+        if (isSignedIn) return;
+        // Signed out: clear supabase session
+        try { await supabase.auth.signOut(); } catch {}
+        // If running in Tauri desktop, clear runtime caches and secure token
+        if (typeof window !== 'undefined' && ((window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__)) {
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('clear_secret_cache');
+            await invoke('logout_account', { accountId: null } as any);
+          } catch {}
+        }
+        try { console.log('[SupabaseSession] user signed out; cleared sessions/caches'); } catch {}
+      } catch {}
+    })();
+  }, [isLoaded, isSignedIn]);
 }

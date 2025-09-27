@@ -389,20 +389,6 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
-        <div className="mb-6 p-4 rounded-lg border bg-white dark:bg-zinc-900" dir="rtl">
-          <div className="font-semibold mb-2">تست اتصال Clerk → Supabase</div>
-          <div className="flex items-center gap-2">
-            <button disabled={testing} onClick={run} className="px-3 py-2 rounded bg-emerald-600 text-white disabled:opacity-50">
-              {testing ? 'در حال تست…' : 'اجرای تست Clerk → Supabase'}
-            </button>
-            <button disabled={testing} onClick={runTauriVerify} className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50">
-              {testing ? 'در حال تست…' : 'تست تأیید Session در Tauri'}
-            </button>
-          </div>
-          <div className="mt-3 p-3 rounded bg-gray-100 dark:bg-zinc-800 text-sm whitespace-pre-wrap" dir="auto">
-            {logs.length === 0 ? 'خروجی تست در اینجا نمایش داده می‌شود' : logs.join('\n')}
-          </div>
-        </div>
         <Dashboard />
       </SignedIn>
       <SignedOut>

@@ -43,6 +43,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
           setWebKey(null);
           setBootError("CLERK_PUBLISHABLE_KEY missing. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY in your environment.");
         }
+        // Env validation (diagnostics)
+        try {
+          const supUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL) as string | undefined;
+          const supAnon = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY) as string | undefined;
+          const clerkDomain = (process.env.NEXT_PUBLIC_CLERK_DOMAIN || process.env.CLERK_DOMAIN) as string | undefined;
+          const clerkFrontend = (process.env.NEXT_PUBLIC_CLERK_FRONTEND_API) as string | undefined;
+          const jwks = (process.env.CLERK_JWKS_URL) as string | undefined;
+          if (!supUrl) { try { diagLog("warn", "[Env] NEXT_PUBLIC_SUPABASE_URL missing"); } catch {} }
+          if (!supAnon) { try { diagLog("warn", "[Env] NEXT_PUBLIC_SUPABASE_ANON_KEY missing"); } catch {} }
+          if (!clerkDomain && !clerkFrontend) { try { diagLog("warn", "[Env] Clerk domain/front-end API missing"); } catch {} }
+          if (!jwks) { try { diagLog("info", "[Env] CLERK_JWKS_URL not set (may be configured server-side)"); } catch {} }
+        } catch {}
         setReady(true);
         try { diagLog("success", "[Bootstrap] Env config + Supabase ready"); } catch {}
       } catch (e: any) {
@@ -145,6 +157,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if (!desktopMode) {
       try { setActive = useClerk().setActive; } catch {}
     }
+    // Handle login-required events from desktop runtime (e.g., when Edge Function returns 401)
+    React.useEffect(() => {
+      const handler = async () => {
+        try {
+          const isTauri = Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
+          if (isTauri) {
+            try { const { invoke } = await import("@tauri-apps/api/core"); await invoke("clear_secret_cache"); await invoke("logout_account", { accountId: null } as any); } catch {}
+            try { await openHostedSignIn("metapip://auth/callback"); } catch { try { window.location.href = "/sign-in"; } catch {} }
+          } else {
+            try { window.location.href = "/sign-in"; } catch {}
+          }
+        } catch {}
+      };
+      const onEvt = () => { void handler(); };
+      try { window.addEventListener("metapip:login-required", onEvt as any); } catch {}
+      return () => { try { window.removeEventListener("metapip:login-required", onEvt as any); } catch {} };
+    }, []);
     useEffect(() => {
       const unsub = useDeepLinkListener(async (url) => {
         try {
@@ -224,7 +253,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }
       });
       return () => { try { unsub(); } catch {} };
-    }, [setActive]);
+    }, [setActive, router]);
+
     return <>{children}</>;
   }
 
@@ -259,7 +289,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         ) : (
-          <ClerkProvider publishableKey={webKey}>
+          <ClerkProvider
+            publishableKey={webKey}
+            signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || "https://accounts.metapip.ir/sign-in"}
+            signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL || "https://accounts.metapip.ir/sign-up"}
+            afterSignOutUrl={process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_OUT_URL || "https://accounts.metapip.ir/sign-in"}
+            afterSignInUrl={"https://app.metapip.ir/"}
+            afterSignUpUrl={"https://app.metapip.ir/"}
+          >
             <ClerkBootstrap>{children}</ClerkBootstrap>
           </ClerkProvider>
         )}
