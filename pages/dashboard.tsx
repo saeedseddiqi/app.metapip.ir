@@ -308,87 +308,12 @@ export default function DashboardPage() {
   }, [desktopMode, log]);
 
   if (desktopMode) {
-    const onLogin = async () => { try { await openHostedSignIn('metapip://auth/callback'); } catch {} };
-    return (
-      <>
-        <div className="mb-3 flex items-center gap-2">
-          <button onClick={onLogin} className="px-3 py-2 rounded bg-emerald-600 text-white">ورود</button>
-          <button onClick={runChecklist} className="px-3 py-2 rounded bg-indigo-600 text-white disabled:opacity-50">اجرای چک‌لیست</button>
-          <Link href="/diagnostics" className="px-3 py-2 rounded bg-gray-700 text-white">عیب‌یابی پیشرفته</Link>
-        </div>
-        <div className="mb-6 p-4 rounded-lg border bg-white dark:bg-zinc-900" dir="rtl">
-          <div className="font-semibold mb-2">تست اتصال (بدون ClerkProvider)</div>
-          <div className="flex items-center gap-2">
-            <button disabled={testing} onClick={run} className="px-3 py-2 rounded bg-emerald-600 text-white disabled:opacity-50">
-              {testing ? 'در حال تست…' : 'اجرای تست JWT → Supabase'}
-            </button>
-            <button disabled={testing} onClick={runTauriVerify} className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50">
-              {testing ? 'در حال تست…' : 'تست تأیید Session در Tauri'}
-            </button>
-          </div>
-          <div className="mt-3 p-3 rounded bg-gray-100 dark:bg-zinc-800 text-sm whitespace-pre-wrap" dir="auto">
-            {logs.length === 0 ? 'خروجی تست در اینجا نمایش داده می‌شود' : logs.join('\n')}
-          </div>
-        </div>
-        <div className="mb-6 p-4 rounded-lg border bg-white dark:bg-zinc-900" dir="rtl">
-          <div className="font-semibold mb-2">تست رجیستر و دیپ‌لینک</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={registerDeepLink} className="px-3 py-2 rounded bg-purple-600 text-white">ثبت/بررسی پروتکل metapip</button>
-            <button onClick={openTestDeepLink} className="px-3 py-2 rounded bg-rose-600 text-white">باز کردن لینک آزمایشی metapip://</button>
-            <button onClick={copyHostedLink} className="px-3 py-2 rounded border border-gray-300 dark:border-zinc-700">کپی لینک ورود Hosted</button>
-          </div>
-          <div className="mt-3 text-xs opacity-80 select-all">
-            {buildHostedUrl()}
-          </div>
-        </div>
-        <div className="mb-6 p-4 rounded-lg border bg-white dark:bg-zinc-900" dir="rtl">
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-semibold">لاگ‌های حیاتی احراز هویت</div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => { try { diagClear(); } catch {} }} className="px-2 py-1 rounded border border-gray-300 dark:border-zinc-700 text-xs">پاک کردن</button>
-              <Link href="/diagnostics" className="px-2 py-1 rounded bg-gray-200 dark:bg-zinc-700 text-xs">جزئیات بیشتر</Link>
-            </div>
-          </div>
-          <div className="max-h-64 overflow-auto text-xs space-y-1">
-            {diagLogs.length === 0 && <div className="opacity-70">لاگی ثبت نشده است.</div>}
-            {diagLogs.map((l) => (
-              <div key={l.id} className="flex gap-2 items-start">
-                <span className="opacity-60 whitespace-nowrap">{new Date(l.ts).toLocaleTimeString()}</span>
-                <span className={`font-semibold ${l.level === 'error' ? 'text-red-600' : l.level === 'warn' ? 'text-amber-600' : l.level === 'success' ? 'text-emerald-600' : 'text-gray-600'}`}>{l.level.toUpperCase()}</span>
-                <span className="">{l.message}</span>
-                {l.data && <pre className="ml-auto opacity-70 overflow-auto max-w-[50%]">{JSON.stringify(l.data, null, 2)}</pre>}
-              </div>
-            ))}
-          </div>
-        </div>
-        <Dashboard />
-      </>
-    );
+    return <Dashboard />;
   }
 
   return (
     <>
       <SignedIn>
-        {showWelcome && (
-          <div className="mb-6 p-4 rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30" dir="rtl">
-            <div className="font-semibold mb-1">ثبت‌نام با موفقیت انجام شد 🎉</div>
-            <div className="text-sm opacity-90">برای اطمینان از آماده‌بودن محیط، می‌توانید تست‌های زیر را اجرا کنید.</div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button disabled={testing} onClick={run} className="px-3 py-2 rounded bg-emerald-600 text-white disabled:opacity-50">
-                {testing ? 'در حال تست…' : 'تست Clerk → Supabase'}
-              </button>
-              <button disabled={testing} onClick={runChecklist} className="px-3 py-2 rounded bg-indigo-600 text-white disabled:opacity-50">
-                {testing ? 'در حال تست…' : 'اجرای چک‌لیست Tauri/Supabase'}
-              </button>
-              <div>SUPABASE_ANON_KEY: {envStatus?.SUPABASE_ANON_KEY ? '✅' : isTauri ? '❌' : 'N/A'}</div>
-              <div>SUPABASE_FUNCTIONS_URL: {envStatus?.SUPABASE_FUNCTIONS_URL ? '✅' : isTauri ? '❌' : 'N/A'}</div>
-              <div>SUPABASE_API_KEY: {envStatus?.SUPABASE_API_KEY ? '✅' : isTauri ? '❌' : 'N/A'}</div>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <button onClick={runChecklist} className="px-3 py-2 rounded bg-indigo-600 text-white disabled:opacity-50">اجرای چک‌لیست</button>
-            </div>
-          </div>
-        )}
         <Dashboard />
       </SignedIn>
       <SignedOut>
